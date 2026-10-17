@@ -1,0 +1,52 @@
+{
+  "bucket": {
+    "bucketId": "veriq-private", "name": "Veriq private inputs and reports",
+    "permissions": [], "fileSecurity": true, "enabled": false,
+    "maximumFileSize": 16777216, "allowedFileExtensions": ["json", "yaml", "pdf", "docx"],
+    "compression": "none", "encryption": true, "antivirus": true
+  },
+  "database": {"databaseId": "veriq", "name": "Veriq", "enabled": false},
+  "tables": [
+    {
+      "tableId": "objects", "name": "Private object metadata", "permissions": [],
+      "rowSecurity": true, "enabled": false,
+      "columns": [
+        {"key": "owner", "type": "string", "size": 64, "required": true},
+        {"key": "category", "type": "string", "size": 8, "required": true},
+        {"key": "kind", "type": "string", "size": 16, "required": true},
+        {"key": "reference", "type": "string", "size": 72, "required": true},
+        {"key": "state", "type": "string", "size": 8, "required": true},
+        {"key": "bytes", "type": "integer", "required": true, "min": 0},
+        {"key": "expires", "type": "bigint", "required": true, "min": 0}
+      ],
+      "indexes": [
+        {"key": "expiry", "type": "key", "attributes": ["expires"], "orders": ["ASC"]},
+        {"key": "audit_expiry", "type": "key", "attributes": ["category", "state", "expires"], "orders": ["ASC", "ASC", "ASC"]},
+        {"key": "owner_reference", "type": "key", "attributes": ["owner", "reference", "state", "expires"], "orders": ["ASC", "ASC", "ASC", "DESC"]}
+      ]
+    },
+    {
+      "tableId": "quotas", "name": "Transactional storage quotas", "permissions": [],
+      "rowSecurity": true, "enabled": false,
+      "columns": [
+        {"key": "count", "type": "integer", "required": true, "min": 0},
+        {"key": "bytes", "type": "integer", "required": true, "min": 0}
+      ],
+      "indexes": []
+    }
+  ],
+  "functions": [
+    {
+      "functionId": "veriq-api", "name": "Veriq MCP API", "runtime": "python-3.12",
+      "execute": ["any"], "events": [], "schedule": "", "timeout": 120, "enabled": true,
+      "logging": false, "entrypoint": "deployment/appwrite/main.py",
+      "commands": "pip install -r requirements.txt", "scopes": []
+    },
+    {
+      "functionId": "veriq-cleanup", "name": "Veriq private expiry cleanup", "runtime": "python-3.12",
+      "execute": [], "events": [], "schedule": "*/5 * * * *", "timeout": 120, "enabled": true,
+      "logging": false, "entrypoint": "deployment/appwrite/cleanup.py",
+      "commands": "pip install -r requirements.txt", "scopes": []
+    }
+  ]
+}

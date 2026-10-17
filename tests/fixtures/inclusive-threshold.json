@@ -1,0 +1,226 @@
+{
+  "name": "Synthetic procurement \u2014 static verification example",
+  "nodes": [
+    {
+      "id": "intake",
+      "name": "Purchase intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "veriq-synthetic-purchase",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "intake-route",
+      "name": "Intake route",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "threshold",
+      "name": "High value purchase",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.body.amount }}",
+              "operation": "largerEqual",
+              "value2": 10000
+            }
+          ]
+        },
+        "combineOperation": "all"
+      }
+    },
+    {
+      "id": "review-request",
+      "name": "Review route",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "approval-gate",
+      "name": "Wait for reviewed approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "approved-route",
+      "name": "Approved route",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "low-value-route",
+      "name": "Low value route",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fulfillment",
+      "name": "Fulfillment waypoint",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Purchase intake": {
+      "main": [
+        [
+          {
+            "node": "Intake route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intake route": {
+      "main": [
+        [
+          {
+            "node": "High value purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High value purchase": {
+      "main": [
+        [
+          {
+            "node": "Review route",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Low value route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review route": {
+      "main": [
+        [
+          {
+            "node": "Wait for reviewed approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reviewed approval": {
+      "main": [
+        [
+          {
+            "node": "Approved route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved route": {
+      "main": [
+        [
+          {
+            "node": "Fulfillment waypoint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Low value route": {
+      "main": [
+        [
+          {
+            "node": "Fulfillment waypoint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fulfillment waypoint": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

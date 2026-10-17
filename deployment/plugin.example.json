@@ -1,0 +1,10 @@
+{
+  "origin": "https://veriq.example.com",
+  "issuer": "https://your-tenant.us.auth0.com/",
+  "oauth_client_id": "replace-with-registered-public-client-id",
+  "publisher": "Replace with verified publisher",
+  "website_url": "https://veriq.example.com/about",
+  "support_url": "https://veriq.example.com/support",
+  "privacy_policy_url": "https://veriq.example.com/privacy",
+  "terms_url": "https://veriq.example.com/terms"
+}

@@ -1,0 +1,44 @@
+schema_version: 1
+policy_id: synthetic-procurement
+policy_version: 1
+fields:
+  body.amount: number
+  body.status: string
+rules:
+- id: REQ-004
+  title: High-value purchases cross the reviewed blocking control
+  type: must_pass_through
+  severity: high
+  scope:
+    source_node_id: intake
+    target_node_id: fulfillment
+  gate_node_id: approval-gate
+  when:
+    field: body.amount
+    operator: gt
+    value: 10000
+  approved:
+    reviewer: synthetic-example-reviewer
+    reviewed_on: '2026-10-16'
+- id: REQ-THRESHOLD
+  title: High-value threshold remains strictly above PHP 10,000
+  type: require_condition
+  severity: high
+  node_id: threshold
+  condition:
+    field: body.amount
+    operator: gt
+    value: 10000
+  approved:
+    reviewer: synthetic-example-reviewer
+    reviewed_on: '2026-10-16'
+- id: REQ-LOW
+  title: Low-value route cannot reach the review-request waypoint
+  type: forbid_path
+  severity: medium
+  scope:
+    source_node_id: low-value-route
+    target_node_id: review-request
+  approved:
+    reviewer: synthetic-example-reviewer
+    reviewed_on: '2026-10-16'

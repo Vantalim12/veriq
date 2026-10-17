@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "policy_id": "synthetic-sop-procurement",
+  "policy_version": 1,
+  "fields": {
+    "body.amount": "number"
+  },
+  "approved": {
+    "reviewer": "synthetic-example-reviewer",
+    "reviewed_on": "2026-10-16"
+  },
+  "decisions": [
+    {
+      "candidate_id": "CAND-001",
+      "decision": "approve",
+      "reason": "Reviewed the high-value condition and blocking waypoint; live identity is external.",
+      "rule": {
+        "id": "REQ-004",
+        "title": "High-value purchases cross the reviewed blocking control",
+        "type": "must_pass_through",
+        "severity": "high",
+        "scope": {
+          "source_node_id": "intake",
+          "target_node_id": "fulfillment"
+        },
+        "gate_node_id": "approval-gate",
+        "when": {
+          "field": "body.amount",
+          "operator": "gt",
+          "value": 10000
+        }
+      }
+    },
+    {
+      "candidate_id": "CAND-002",
+      "decision": "review_only",
+      "reason": "Manager identity needs live external evidence."
+    }
+  ],
+  "draft_hash": "sha256:a12f734dd8fe290fe9a13864ded9311f98d7662ee2143cc71cbffb4bb715a0bd"
+}

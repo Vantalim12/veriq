@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!pyproject.toml
+!constraints.txt
+!README.md
+!src/
+!src/veriq/
+!src/veriq/*.py

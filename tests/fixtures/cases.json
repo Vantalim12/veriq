@@ -1,0 +1,322 @@
+[
+  {
+    "id": "passing-baseline",
+    "workflow": "passing-baseline.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "introduced-bypass",
+    "workflow": "introduced-bypass.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "name-only-change",
+    "workflow": "name-only-change.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "node-order-change",
+    "workflow": "node-order-change.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "canvas-only-change",
+    "workflow": "canvas-only-change.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unknown-code",
+    "workflow": "unknown-code.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "dynamic-threshold",
+    "workflow": "dynamic-threshold.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "UNSUPPORTED",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unknown-if-version",
+    "workflow": "unknown-if-version.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "UNSUPPORTED",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "disabled-gate",
+    "workflow": "disabled-gate.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "disabled-if",
+    "workflow": "disabled-if.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "UNSUPPORTED",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "control-name-only",
+    "workflow": "control-name-only.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "wait-timeout",
+    "workflow": "wait-timeout.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "loop-coverage",
+    "workflow": "loop-coverage.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "failure-plus-unknown",
+    "workflow": "failure-plus-unknown.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unreachable-gate",
+    "workflow": "unreachable-gate.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "reversed-if-outputs",
+    "workflow": "reversed-if-outputs.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "raised-threshold",
+    "workflow": "raised-threshold.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "lowered-threshold",
+    "workflow": "lowered-threshold.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "inclusive-threshold",
+    "workflow": "inclusive-threshold.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "constant-true",
+    "workflow": "constant-true.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "constant-false",
+    "workflow": "constant-false.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unreachable-target",
+    "workflow": "unreachable-target.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "changed-gate-id",
+    "workflow": "changed-gate-id.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "changed-target-id",
+    "workflow": "changed-target-id.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "forbidden-route",
+    "workflow": "forbidden-route.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "FAIL"
+    }
+  },
+  {
+    "id": "string-condition",
+    "workflow": "string-condition.json",
+    "rules": "string.rules.yaml",
+    "expected": {
+      "REQ-004": "FAIL",
+      "REQ-THRESHOLD": "FAIL",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "irrelevant-unknown",
+    "workflow": "irrelevant-unknown.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "PASS",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "error-routing",
+    "workflow": "error-routing.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "UNSUPPORTED",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unexpected-noop-parameters",
+    "workflow": "unexpected-noop-parameters.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "field-after-wait",
+    "workflow": "field-after-wait.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unsupported-input-port",
+    "workflow": "unsupported-input-port.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  },
+  {
+    "id": "unsupported-channel",
+    "workflow": "unsupported-channel.json",
+    "rules": "../../examples/veriq.rules.yaml",
+    "expected": {
+      "REQ-004": "NEEDS_REVIEW",
+      "REQ-THRESHOLD": "PASS",
+      "REQ-LOW": "PASS"
+    }
+  }
+]

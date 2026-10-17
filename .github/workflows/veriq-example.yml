@@ -1,0 +1,50 @@
+name: Veriq workflow check
+
+on:
+  pull_request:
+    paths:
+      - 'examples/purchase-v1.json'
+      - 'examples/veriq.rules.yaml'
+      - '.github/workflows/veriq-example.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out reviewed verifier, policy, and baseline
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: verifier
+          persist-credentials: false
+      - name: Check out candidate data
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install the reviewed verifier
+        run: python -m pip install -c verifier/constraints.txt ./verifier
+      - name: Check candidate as data against the reviewed policy
+        run: |
+          veriq verify \
+            --workflow candidate/examples/purchase-v1.json \
+            --baseline verifier/examples/purchase-v1.json \
+            --rules verifier/examples/veriq.rules.yaml \
+            --output-dir reports
+      - name: Retain synthetic evidence even after a failed check
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: veriq-audit
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7
+

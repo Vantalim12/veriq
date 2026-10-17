@@ -1,0 +1,53 @@
+name: veriq
+services:
+  verifier:
+    build:
+      context: ..
+    restart: unless-stopped
+    environment:
+      VERIQ_PUBLIC_ORIGIN: https://${VERIQ_DOMAIN:?Set VERIQ_DOMAIN}
+      VERIQ_OAUTH_ISSUER: ${VERIQ_OAUTH_ISSUER:?Set VERIQ_OAUTH_ISSUER}
+      VERIQ_JWKS_URL: ${VERIQ_JWKS_URL:?Set VERIQ_JWKS_URL}
+      VERIQ_DATA_DIR: /data
+    volumes:
+      - artifacts:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/healthz', headers={'Host':os.environ['VERIQ_PUBLIC_ORIGIN'].split('://',1)[1]}); urllib.request.urlopen(r,timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      VERIQ_DOMAIN: ${VERIQ_DOMAIN:?Set VERIQ_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy_config:/config
+    depends_on:
+      verifier:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+volumes:
+  artifacts:
+  certificates:
+  caddy_config:
