@@ -85,8 +85,10 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
             return JSONResponse(result, status_code=201)
         except TimeoutError:
             return JSONResponse({"error": "upload timed out"}, status_code=408)
-        except (InputError, ValueError, UnicodeError):
-            return JSONResponse({"error": "invalid input or artifact quota reached; check format and limits"}, status_code=400)
+        except InputError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except (ValueError, UnicodeError):
+            return JSONResponse({"error": "invalid input; check file encoding and format"}, status_code=400)
         except OSError:
             return JSONResponse({"error": "artifact storage unavailable"}, status_code=503)
 

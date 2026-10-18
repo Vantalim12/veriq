@@ -219,3 +219,19 @@ def test_failed_token_exchange_is_sanitized_and_never_creates_a_session(settings
         assert "PRIVATE_PROVIDER_ERROR" not in response.text and "private-code" not in response.text
         assert "Max-Age=0" in response.headers["set-cookie"]
         assert client.get("/upload/session").json()["signed_in"] is False
+
+
+def test_policy_upload_explains_validation_failure_and_allows_corrected_retry(browser):
+    client, settings, _ = browser
+    sign_in(client, settings)
+    headers = {"Origin": settings.origin, "Content-Type": "application/octet-stream"}
+    import yaml
+    policy = yaml.safe_load((ROOT / "examples/veriq.rules.yaml").read_text())
+    for rule in policy["rules"]:
+        del rule["approved"]
+    response = client.post("/upload/artifacts/policy", content=yaml.safe_dump(policy).encode(), headers=headers)
+    assert response.status_code == 400
+    assert "approval" in response.json()["error"]
+    assert "quota" not in response.json()["error"]
+    response = client.post("/upload/artifacts/policy", content=(ROOT / "examples/veriq.rules.yaml").read_bytes(), headers=headers)
+    assert response.status_code == 201, response.text
