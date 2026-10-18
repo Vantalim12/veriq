@@ -33,12 +33,15 @@ class HostedSettings:
     issuer: str
     jwks_url: str
     data_dir: Path
+    upload_client_id: str = ""
 
     def __post_init__(self):
         for value in (self.origin, self.issuer, self.jwks_url):
             https_url(value)
         if urlsplit(self.origin).path or self.origin.endswith("/"):
             raise InputError("VERIQ_PUBLIC_ORIGIN must have no path or trailing slash")
+        if len(self.upload_client_id) > 256 or any(c.isspace() for c in self.upload_client_id):
+            raise InputError("VERIQ_UPLOAD_CLIENT_ID must be a public OAuth client ID")
 
     @property
     def resource(self):
@@ -49,7 +52,8 @@ class HostedSettings:
         import os
         try:
             return cls(os.environ["VERIQ_PUBLIC_ORIGIN"], os.environ["VERIQ_OAUTH_ISSUER"],
-                       os.environ["VERIQ_JWKS_URL"], Path(os.environ.get("VERIQ_DATA_DIR", "/data")))
+                       os.environ["VERIQ_JWKS_URL"], Path(os.environ.get("VERIQ_DATA_DIR", "/data")),
+                       os.environ.get("VERIQ_UPLOAD_CLIENT_ID", ""))
         except KeyError as exc:
             raise InputError("configure VERIQ_PUBLIC_ORIGIN, VERIQ_OAUTH_ISSUER and VERIQ_JWKS_URL before serving") from exc
 
@@ -84,8 +88,8 @@ class JWTVerifier:
             return None
 
 
-def principal():
-    token = get_access_token()
+def principal(token=None):
+    token = token or get_access_token()
     if token is None or token.subject is None or not (token.claims or {}).get("iss"):
         raise InputError("authenticated user identity required")
     return digest([token.claims["iss"], token.subject]).removeprefix("sha256:")

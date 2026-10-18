@@ -33,12 +33,12 @@ async def dispatch(context, settings, store):
     if not path.startswith("/") or path.startswith("//") or "?" in path or "#" in path:
         return context.res.json({"error": "invalid request path"}, 400)
     body = request.body_binary
-    limit = MAX_SOP_BYTES if path.startswith("/artifacts/") else 64 * 1024
+    limit = MAX_SOP_BYTES if path.startswith(("/artifacts/", "/upload/artifacts/")) else 64 * 1024
     if not isinstance(body, bytes) or len(body) > limit:
         return context.res.json({"error": "input exceeds the byte limit"}, 413,
                                 {"cache-control": "no-store"})
     allowed = {"authorization", "content-type", "accept", "origin", "host", "mcp-protocol-version",
-               "mcp-session-id", "last-event-id"}
+               "mcp-session-id", "last-event-id", "cookie", "content-length"}
     headers = {key.lower(): value for key, value in request.headers.items() if key.lower() in allowed}
     url = settings.origin + path
     if request.query_string:

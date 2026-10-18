@@ -1,16 +1,16 @@
 # Phase 2: Docker, HTTPS and plugin packaging
 
-This phase implements hosted distribution using the existing verifier. It does not add live n8n access, workflow execution, auto-repair, billing or a dashboard. The owner selected **Appwrite Cloud for hosting and Auth0 for authentication**. No public service or directory listing has been created.
+This phase implements hosted distribution using the existing verifier. It does not add live n8n access, workflow execution, auto-repair, billing or an audit dashboard. The owner selected **Appwrite Cloud for hosting and Clerk for authentication**. The API is deployed for development testing; no public directory listing has been created. The browser upload page requires deployment of the updated source and the configuration below.
 
-## Selected target: Appwrite Cloud + Auth0
+## Selected target: Appwrite Cloud + Clerk
 
-The connected Appwrite account already has a `veriq` project in the Singapore region. Auth0 will issue user access tokens; Veriq will validate them using its existing JWT verifier.
+The connected Appwrite account already has a `veriq` project in the Singapore region. Clerk issues user OAuth access tokens; Veriq will validate them using its existing JWT verifier.
 
-The Appwrite Functions adapter, private Storage backend, TablesDB ownership/quota records and scheduled cleanup are implemented. Follow the [Appwrite deployment guide](appwrite-deployment.md) to provision resources, package the source and deploy both functions. Auth0 tokens are validated by Veriq; all Appwrite access uses a private server key and backend ownership checks.
+The Appwrite Functions adapter, private Storage backend, TablesDB ownership/quota records and scheduled cleanup are implemented. Follow the [Appwrite deployment guide](appwrite-deployment.md) to provision resources, package the source and deploy both functions. Clerk tokens are validated by Veriq; all Appwrite access uses a private server key and backend ownership checks.
 
 The Docker Compose instructions below remain an alternative Docker-host deployment procedure. Appwrite Cloud uses its own HTTPS function endpoint and durable services instead of Caddy, a persistent `/data` mount and a process-local audit cache.
 
-Still needed: public MCP hostname, Auth0 tenant domain and public client ID, and publisher/support/legal URLs. Keep the final API identifier tied to that hostname before issuing tokens or building a release package.
+The development issuer, MCP hostname and public client ID are configured; see [Clerk configuration](clerk-configuration.md). Still needed: private Appwrite resources/runtime credentials, activation, a real OAuth sign-in test, and publisher/support/legal URLs. Keep the resource tied to the MCP hostname before issuing tokens or building a release package.
 
 ## Start with Docker + HTTPS
 
@@ -31,13 +31,14 @@ The app image runs as UID/GID 10001, with a read-only root filesystem, a private
 
 For non-container inspection, install `python -m pip install -c constraints.txt -e '.[test,hosted]'`. `veriq serve` uses the same environment settings, plus optional `VERIQ_DATA_DIR` (default `/data`), and listens on port 8000 behind the HTTPS proxy.
 
-## Configure Auth0 before opening access
+## Configure Clerk before opening access
 
-1. Register a custom API with identifier `https://<public-mcp-host>/mcp` exactly and RS256 signing. Add permissions `veriq:read` and `veriq:upload`. Veriq reads the token's space-separated `scope` claim, not Auth0's optional `permissions` array. [API settings](https://auth0.com/docs/get-started/apis/api-settings).
-2. Register a public OAuth application with authorization-code flow, PKCE S256, token endpoint authentication method `none`, and the exact ChatGPT callback supplied during setup. Authorize that client for this API and its intended scopes; grant upload access only where required. Strict third-party applications require an explicit API client grant and user consent. [Auth0 security controls](https://auth0.com/docs/get-started/applications/third-party-applications/security-controls).
-3. Check the tenant's Resource Parameter Compatibility Profile: Auth0 documents `resource` as an alternative to `audience` when this is set to `compatibility`. Test that a request for `resource=https://<public-mcp-host>/mcp` yields that exact token audience. Do not work around a mismatch by disabling audience validation. [PKCE authorization parameters](https://auth0.com/docs/api/authentication/authorization-code-flow-with-pkce/authorize-with-pkce).
-4. Copy the exact `issuer` and `jwks_uri` from `https://<auth0-domain>/.well-known/openid-configuration` into the service settings. A typical issuer is `https://<tenant>.<region>.auth0.com/` and JWKS URL is `https://<tenant>.<region>.auth0.com/.well-known/jwks.json`. Preserve the issuer's trailing slash and use discovery values when a custom domain is enabled.
-5. Put only the public client ID and matching issuer in the plugin configuration. Obtain a real user access token and verify allowed/denied scopes, wrong-audience rejection, user isolation and expiry before opening access. Do not use an ID token or an Appwrite API key as the MCP bearer token.
+1. In **Configure → Agents → MCP server**, register the exact resource `https://<public-mcp-host>/mcp`. Automatic CIMD onboarding stays off for this manually registered client. See [Clerk MCP setup](https://clerk.com/docs/guides/ai/mcp/build-mcp-server).
+2. In **Configure → Developers → OAuth applications → Scopes**, create and advertise `veriq:read` and `veriq:upload`. Veriq reads the access token's space-separated `scope` claim. Reading audits requires `veriq:read`; uploading/deleting inputs requires `veriq:upload`.
+3. Create a **Public** OAuth application with those allowed scopes and keep the consent screen enabled. Enable `openid`, `email`, and `profile` when Clerk advertises them in discovery: ChatGPT requests advertised OIDC scopes by default, even when the plugin base scope is only `veriq:read`. Keep private/public metadata scopes disabled. See [OpenAI OIDC scope requirements](https://developers.openai.com/plugins/build/auth#oidc-scopes). Clerk lists `offline_access` as a built-in allowed scope; the plugin requests only `veriq:read` by default. Allowed scopes do not themselves grant access. Register the exact ChatGPT callback supplied during connection setup. See [Clerk OAuth behavior](https://clerk.com/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth).
+4. Under OAuth **Settings**, require PKCE S256, select **JWT access tokens**, and enable **Include Audience**. Send `resource=https://<public-mcp-host>/mcp` in the authorization request and verify that exact value in the token's `aud`. Keep CIMD/DCR publication disabled for the manually registered client. Veriq validates JWTs locally; already-issued tokens remain valid until expiry. See [token formats](https://clerk.com/docs/guides/development/machine-auth/token-formats).
+5. Copy the exact `issuer` and `jwks_uri` from the instance's `/.well-known/openid-configuration` into the service settings. The configured development issuer has **no trailing slash**. Preserve discovery values exactly when switching to production.
+6. Put only the public client ID and matching issuer in the plugin configuration. Obtain a real user OAuth access token and verify allowed/denied scopes, wrong-audience rejection, user isolation and expiry before opening access. Do not substitute a Clerk session/ID token or an Appwrite API key for the MCP access token. Never disable audience validation to make a token pass.
 
 Use an authorization server supporting discovery and authorization-code login with PKCE S256. Register a public client for the plugin (`token_endpoint_auth_method=none`) and allow the exact ChatGPT callback shown during connection setup. Keep this public client ID for the plugin package. Other OAuth registration methods need a separate configuration change; the generated package uses a pre-registered public client.
 
@@ -54,6 +55,20 @@ The resource metadata is available at `/.well-known/oauth-protected-resource/mcp
 JWT validation uses a cached trusted JWKS. Use short-lived access tokens: this service does not introspect revocations or implement provider logout/refresh. A valid already-issued token may remain usable until expiry; provider signing-key cache refresh is also bounded by its cache lifetime. Login/consent, provider configuration, real token issuance and ChatGPT OAuth connection must be tested with the chosen provider before public use.
 
 ## Upload inputs securely
+
+### Browser upload page
+
+Open `https://<domain>/upload` after deploying this version. It accepts one file per upload: n8n workflow JSON (2 MiB), SOP PDF/DOCX (10 MiB), and reviewed Veriq rules YAML (2 MiB). Upload a baseline as a second workflow when comparing versions. The rules form requires confirmation that a human reviewed the rules; file validation still runs on the server. This confirmation does not create or independently certify an approval.
+
+1. In the existing Clerk **Public** OAuth application, add the exact callback `https://<domain>/upload/callback`. Keep the existing ChatGPT callback. The application must allow `veriq:upload`, require PKCE S256 and issue JWT access tokens with Include Audience enabled. See [Clerk public clients and PKCE](https://clerk.com/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#public-clients-and-pkce).
+2. Set `VERIQ_UPLOAD_CLIENT_ID` to its public client ID in the API function's variables (or Docker environment), then redeploy. No client secret or Clerk publishable key is required. An empty value disables browser login while leaving the bearer-token API available.
+3. Sign in through the page with the **same Clerk user** connected to Veriq in ChatGPT. Allow upload access, upload your files, and copy each artifact ID. Files remain private and expire after 24 hours. The ID list is held only in the current page; copy IDs before refreshing or leaving.
+
+The selected development deployment uses `VERIQ_UPLOAD_CLIENT_ID=RG1VUYAaWua4aGng` and requires the additional callback `https://veriq.sgp.appwrite.run/upload/callback` to be registered before browser login will work. Local source changes do not update an active Appwrite deployment: push the changes to the connected repository and deploy that commit, or deploy a new archive.
+
+Login uses a ten-minute, browser-bound state/PKCE transaction and checks Clerk's exact authorization-response issuer. The server exchanges the authorization code and validates the access token with the same signature, issuer, audience, expiry and scope checks as MCP. The browser requests only `veriq:upload`; no OIDC identity or refresh scopes are requested. Access tokens live in a host-only Secure, HttpOnly, SameSite=Lax cookie and are never returned to JavaScript. Cookie credentials authorize only the browser upload routes, which also require an exact same-origin `Origin` header on uploads and sign-out. They do not authorize `/mcp` or the raw artifact API. Browser sessions expire within one hour or at token expiry, whichever comes first; sign in again when needed. Signing out clears the upload cookie, but does not revoke the token at Clerk, delete files, or end Clerk/ChatGPT sessions.
+
+### Raw artifact API
 
 The artifact API accepts raw file bodies using the same resource-bound OAuth access token. Obtain that token through your configured provider's authorized client flow. The read-only MCP tools cannot upload or approve rules. Review and approve policies locally before upload.
 
@@ -112,4 +127,4 @@ docker compose --env-file deployment/.env -f deployment/compose.yaml logs --tail
 
 Stop while retaining data and certificates with `docker compose --env-file deployment/.env -f deployment/compose.yaml down`. Avoid `down --volumes` unless you intend to delete stored inputs and certificates. Build and test a replacement image before upgrading; no database migration is required. Docker base images follow their major tags; record deployed digests and rebuild for security updates.
 
-Automated tests cover JWT signatures/claims, OAuth discovery, scopes, host/origin checks, bounded/invalid uploads, expiry, quotas, private file permissions, cross-user artifact/audit access, Appwrite cold-start persistence and quota rollback, shared core results, local stdio compatibility and package safety. CI includes an image build and installed-entrypoint check. Live Appwrite provisioning/deployment, DNS, certificates, Auth0 login, ChatGPT connection, public review and production load remain deployment work.
+Automated tests cover JWT signatures/claims, OAuth discovery, scopes, host/origin checks, bounded/invalid uploads, expiry, quotas, private file permissions, cross-user artifact/audit access, Appwrite cold-start persistence and quota rollback, shared core results, local stdio compatibility and package safety. CI includes an image build and installed-entrypoint check. Live Appwrite provisioning/deployment, DNS, certificates, Clerk login, ChatGPT connection, public review and production load remain deployment work.

@@ -19,6 +19,7 @@ from .artifacts import ArtifactStore, KINDS
 from .hosted_auth import HostedSettings, JWTVerifier, READ_SCOPE, UPLOAD_SCOPE, principal
 from .ingestion import InputError
 from .mcp_server import register_tools
+from .browser_upload import upload_routes
 
 
 class HostedMCP(FastMCP):
@@ -34,7 +35,8 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
         store = ArtifactStore(settings.data_dir)
     server = HostedMCP("Veriq", instructions=(
         "Read-only static verification. Supply artifact_id values returned by authenticated uploads, never server paths or URLs. "
-        "The legacy relative_path argument also takes an artifact_id. Upload workflows and reviewed rules through the artifact API. "
+        "The legacy relative_path argument also takes an artifact_id. "
+        f"Upload workflows, SOPs and reviewed rules at {settings.origin}/upload using the same Clerk account, or through the artifact API. "
         "Drafts never approve rules; PASS does not prove live authorization or compliance."),
         stateless_http=True, json_response=True, max_request_body_size=64 * 1024,
         auth=AuthSettings(issuer_url=settings.issuer, resource_server_url=settings.resource,
@@ -48,7 +50,7 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
     upload_slots = anyio.Semaphore(2)
     metadata_url = settings.origin + "/.well-known/oauth-protected-resource/mcp"
 
-    async def upload(request: Request):
+    async def upload(request: Request, *, owner=None):
         kind = request.path_params["kind"]
         if kind not in KINDS:
             return JSONResponse({"error": "unsupported artifact kind"}, status_code=400)
@@ -59,7 +61,7 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
             length = request.headers.get("content-length")
             if length is not None and (int(length) < 0 or int(length) > limit):
                 return JSONResponse({"error": "input exceeds the byte limit"}, status_code=413)
-            owner = principal()
+            owner = owner or principal()
             async with upload_slots:
                 with anyio.fail_after(30):
                     with store.temporary(owner, kind) as temporary:
@@ -103,6 +105,7 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
         Route("/artifacts/{artifact_id}", RequireAuthMiddleware(request_response(delete), [UPLOAD_SCOPE], metadata_url), methods=["DELETE"]),
         Route("/healthz", health),
     ])
+    app.routes.extend(upload_routes(settings, upload))
     original_lifespan = app.router.lifespan_context
 
     async def cleanup_files():
@@ -131,6 +134,7 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     app.add_middleware(BaseHTTPMiddleware, dispatch=private_responses)

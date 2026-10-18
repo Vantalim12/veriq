@@ -1,7 +1,7 @@
 {
   "origin": "https://veriq.example.com",
-  "issuer": "https://your-tenant.us.auth0.com/",
-  "oauth_client_id": "replace-with-registered-public-client-id",
+  "issuer": "https://large-bluebird-4071.clerk.accounts.dev",
+  "oauth_client_id": "RG1VUYAaWua4aGng",
   "publisher": "Replace with verified publisher",
   "website_url": "https://veriq.example.com/about",
   "support_url": "https://veriq.example.com/support",

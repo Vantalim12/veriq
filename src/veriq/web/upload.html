@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upload files · Veriq</title>
+  <link rel="stylesheet" href="/upload/assets/upload.css">
+  <script src="/upload/assets/upload.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/upload" aria-label="Veriq uploads">Veriq<span class="brand-section">/ workspace</span></a>
+    <nav aria-label="Page navigation"><a href="#files-title">Upload files</a><a href="#results-title">Use in ChatGPT <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main>
+    <div class="intro">
+      <p class="eyebrow">WORKFLOW VERIFICATION, WITH EVIDENCE</p>
+      <h1>Bring your workflow.<br><span>Keep the evidence.</span></h1>
+      <p class="lede">Upload your workflow, SOP, and reviewed rules. Then use their artifact IDs with Veriq in ChatGPT.</p>
+    </div>
+
+    <div class="workspace">
+    <section class="account" aria-labelledby="account-title">
+      <div><h2 id="account-title">1. Connect your account</h2><p id="account-status" role="status">Checking your upload session…</p></div>
+      <a class="button primary" id="login" href="/upload/login" hidden>Sign in with Clerk <span aria-hidden="true">↗</span></a>
+      <button class="button secondary" id="logout" type="button" hidden>Sign out of uploads</button>
+    </section>
+    <p id="page-error" class="error" role="alert" hidden></p>
+    <noscript><p class="error">Enable JavaScript to sign in and upload files.</p></noscript>
+
+    <section aria-labelledby="files-title" class="files-section">
+      <div class="section-heading"><h2 id="files-title">2. Upload your files</h2><span>Files expire after 24 hours</span></div>
+      <div class="file-grid">
+        <form class="file-card" data-type="workflow">
+          <fieldset disabled>
+            <div class="card-top"><span class="file-tag">JSON</span><span class="size">Up to 2 MiB</span></div>
+            <h3>n8n workflow</h3>
+            <p>Choose an exported workflow. Upload another version separately to compare changes.</p>
+            <label for="workflow">Workflow JSON</label>
+            <input id="workflow" type="file" accept=".json" required aria-describedby="workflow-status">
+            <button class="button secondary" type="submit">Upload workflow</button>
+            <p class="form-status" id="workflow-status" role="status" aria-live="polite"></p>
+          </fieldset>
+        </form>
+        <form class="file-card" data-type="sop">
+          <fieldset disabled>
+            <div class="card-top"><span class="file-tag">PDF / DOCX</span><span class="size">Up to 10 MiB</span></div>
+            <h3>Standard operating procedure</h3>
+            <p>Add the source document that describes how your process should work.</p>
+            <label for="sop">SOP document</label>
+            <input id="sop" type="file" accept=".pdf,.docx" required aria-describedby="sop-status">
+            <button class="button secondary" type="submit">Upload SOP</button>
+            <p class="form-status" id="sop-status" role="status" aria-live="polite"></p>
+          </fieldset>
+        </form>
+        <form class="file-card" data-type="policy">
+          <fieldset disabled>
+            <div class="card-top"><span class="file-tag">YAML</span><span class="size">Up to 2 MiB</span></div>
+            <h3>Reviewed rules</h3>
+            <p>Add Veriq rules you have checked and approved for this audit.</p>
+            <label for="policy">Rules YAML</label>
+            <input id="policy" type="file" accept=".yaml,.yml" required aria-describedby="policy-status">
+            <label class="review-confirmation"><input type="checkbox" required> I have reviewed and approved these rules.</label>
+            <button class="button secondary" type="submit">Upload rules</button>
+            <p class="form-status" id="policy-status" role="status" aria-live="polite"></p>
+          </fieldset>
+        </form>
+      </div>
+    </section>
+
+    </div>
+    <section class="results" aria-labelledby="results-title">
+      <div class="section-heading"><h2 id="results-title">3. Continue in ChatGPT</h2><span id="result-count">No files uploaded yet</span></div>
+      <p>Use the same Clerk account connected to Veriq in ChatGPT. Copy each artifact ID into your request; the tool’s <code>relative_path</code> field takes this ID.</p>
+      <p id="empty-results" class="empty">Your uploaded files and artifact IDs will appear here.</p>
+      <ul id="artifact-list" aria-label="Uploaded artifacts"></ul>
+      <p class="session-note">This list lasts for this page session. Copy your IDs before leaving. Signing out does not delete uploaded files or sign you out of Clerk.</p>
+    </section>
+  </main>
+  <footer>
+    <div class="footer-top"><a href="#files-title">Upload files</a><span>Evidence-backed workflow checks</span><span>Private to your account.</span></div>
+    <div class="footer-texture" aria-hidden="true"></div>
+    <div class="footer-wordmark" aria-hidden="true">Veriq</div>
+  </footer>
+</body>
+</html>

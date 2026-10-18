@@ -13,6 +13,7 @@ pytest.importorskip("mcp")
 pytest.importorskip("jwt")
 
 from test_hosted import settings, signing_key, bearer
+from veriq.browser_upload import COOKIE
 from veriq.appwrite_function import main, cleanup
 from veriq.appwrite_store import AppwriteAPI, AppwriteError, AppwriteStore
 from veriq.ingestion import InputError
@@ -289,6 +290,28 @@ def test_function_rejects_oversize_wrong_host_and_missing_configuration(cloud, m
     assert invoke("/healthz", headers={"origin": "https://attacker.test"}).status == 403
     monkeypatch.delenv("VERIQ_OAUTH_ISSUER")
     assert invoke("/healthz").status == 503
+
+
+def test_function_forwards_browser_cookie_and_document_size_budget(cloud, settings, signing_key, monkeypatch):
+    _, invoke = cloud
+    monkeypatch.setenv("VERIQ_UPLOAD_CLIENT_ID", "public-upload-client")
+    login = invoke("/upload/login", user=None)
+    assert login.status == 303
+    assert "code_challenge_method=S256" in login.headers["location"]
+    assert "httponly" in login.headers["set-cookie"].lower()
+    headers = {"cookie": COOKIE + "=" + bearer(signing_key, settings)[7:], "origin": settings.origin}
+    # A valid JSON workflow larger than the MCP request budget must reach the artifact parser.
+    workflow = (ROOT / "examples/purchase-v1.json").read_bytes() + b" " * (65 * 1024)
+    response = invoke("/upload/artifacts/workflow", method="POST", user=None, body=workflow, headers=headers)
+    assert response.status == 201, response.body
+    assert invoke("/upload/session", user=None, headers=headers).status == 200
+    assert json.loads(invoke("/upload/session", user=None, headers=headers).body)["signed_in"] is True
+    assert invoke("/upload/artifacts/workflow", method="POST", user=None, body=workflow,
+                  headers={"cookie": headers["cookie"]}).status == 403
+    assert invoke("/upload/artifacts/pdf", method="POST", body=b"x" * (10 * 1024 * 1024 + 1),
+                  user=None, headers=headers).status == 413
+    logout = invoke("/upload/logout", method="POST", user=None, headers=headers)
+    assert logout.status == 200 and "Max-Age=0" in logout.headers["set-cookie"]
 
 
 @pytest.mark.parametrize("endpoint,key", [("http://insecure.test/v1", "key"),

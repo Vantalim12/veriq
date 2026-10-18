@@ -83,7 +83,9 @@ P1 adds located PDF/DOCX extraction, source-backed requirement drafts, explicit 
 
 ## Hosted deployment
 
-Phase 2 adds an OAuth-protected HTTP MCP service, private expiring uploads and a plugin ZIP builder. The selected Appwrite Cloud deployment includes Functions entry points, private Storage, transactional TablesDB quotas and scheduled expiry cleanup, with Auth0 authentication. Follow the [Appwrite deployment guide](docs/appwrite-deployment.md). The [Docker + HTTPS option](docs/hosted-deployment.md) remains available. The service is not publicly deployed.
+Phase 2 adds an OAuth-protected HTTP MCP service, private expiring uploads and a plugin ZIP builder. The selected Appwrite Cloud deployment includes Functions entry points, private Storage, transactional TablesDB quotas and scheduled expiry cleanup, with Clerk OAuth authentication. Follow the [Appwrite deployment guide](docs/appwrite-deployment.md). The [Docker + HTTPS option](docs/hosted-deployment.md) remains available. Clerk development-instance configuration is recorded in [the configuration guide](docs/clerk-configuration.md).
+
+The browser upload page at `/upload` supports workflow JSON, SOP PDF/DOCX and reviewed rules YAML. Configure `VERIQ_UPLOAD_CLIENT_ID` and register the exact `<public-origin>/upload/callback` in Clerk before deploying this version. Sign in with the same Clerk account used in ChatGPT, then copy the returned artifact IDs into your Veriq requests. See [browser upload setup](docs/hosted-deployment.md#browser-upload-page).
 
 ## Current phase
 
