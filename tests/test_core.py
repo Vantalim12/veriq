@@ -57,6 +57,30 @@ def test_counterexample_and_regression(policy):
     assert report["summary"]["exit_code"] == 1
 
 
+def test_path_exploration_does_not_rescan_all_connections_per_state(policy):
+    from veriq.contracts import ExportNode
+    from veriq.ingestion import Edge, Workflow
+
+    class CountedEdges(list):
+        scans = 0
+        def __iter__(self):
+            self.scans += 1
+            return super().__iter__()
+
+    nodes = {str(i): ExportNode(id=str(i), name=str(i), type="n8n-nodes-base.noOp",
+                               typeVersion=1, parameters={}) for i in range(100)}
+    edges = CountedEdges(Edge(str(i), 0, str(j), 0) for i in range(100)
+                         for j in range(i + 1, min(100, i + 11)))
+    workflow = Workflow(nodes, edges, {}, "hash", "hash", {})
+    rules, _ = policy
+    rule = rules.rules[-1].model_copy(update={"scope": rules.rules[0].scope.model_copy(
+        update={"source_node_id": "0", "target_node_id": "99"})})
+    result = evaluate(workflow, rules.model_copy(update={"rules": [rule]}))[0]
+    assert result["verdict"] == "NEEDS_REVIEW"
+    assert result["limitations"] == ["path exploration state budget exhausted"]
+    assert edges.scans < 100
+
+
 @pytest.mark.parametrize("name", ["name-only-change", "node-order-change", "canvas-only-change"])
 def test_nonmaterial_edits_preserve_semantics(policy, name):
     rules, policy_hash = policy

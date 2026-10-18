@@ -1,6 +1,6 @@
 """Bounded file readers and stable workflow normalization."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 import math
@@ -173,9 +173,15 @@ class Workflow:
     input_hash: str
     graph_hash: str
     settings: dict
+    _outgoing: dict[str, list[Edge]] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self._outgoing = {node_id: [] for node_id in self.nodes}
+        for edge in self.edges:
+            self._outgoing[edge.source].append(edge)
 
     def outgoing(self, node_id):
-        return [edge for edge in self.edges if edge.source == node_id]
+        return self._outgoing.get(node_id, [])
 
 
 def read_workflow(path: Path) -> Workflow:

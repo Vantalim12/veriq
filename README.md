@@ -134,6 +134,8 @@ Follow the [runnable SOP and MCP guide](docs/sop-and-mcp.md).
 
 [Appwrite deployment](docs/appwrite-deployment.md) · [Docker + HTTPS](docs/hosted-deployment.md) · [Browser upload setup](docs/hosted-deployment.md#browser-upload-page) · [Clerk configuration](docs/clerk-configuration.md)
 
+[Production configuration and acceptance checks](docs/production-readiness.md) cover Clerk cutover, two-account verification, per-owner report retention, and the hosted parser subprocess boundary.
+
 ## Development & release status
 
 Run the local suite after installing the test extra:

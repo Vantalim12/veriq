@@ -13,7 +13,8 @@ from .artifacts import (ArtifactStore, KINDS, TTL_SECONDS, MAX_USER_BYTES, MAX_T
                         MAX_USER_FILES, MAX_TOTAL_FILES)
 from .hosted_auth import https_url
 from .ingestion import InputError, digest
-from .reporting import MAX_REPORT_BYTES, json_report
+from .reporting import (MAX_REPORT_BYTES, MAX_USER_AUDITS, MAX_TOTAL_AUDITS,
+                        MAX_TOTAL_AUDIT_BYTES, json_report)
 
 
 class AppwriteError(OSError):
@@ -106,16 +107,25 @@ class AppwriteStore(ArtifactStore):
                     continue
                 raise
 
-    def reserve(self, identifier, owner, kind, size, reference):
+    def reserve(self, identifier, owner, kind, size, reference, replacement=None):
         category = "audit" if kind == "audit" else "artifact"
         self.ensure_counters(owner, category)
-        limits = [(8, 8 * MAX_REPORT_BYTES)] * 2 if category == "audit" else [
+        limits = [(MAX_TOTAL_AUDITS, MAX_TOTAL_AUDIT_BYTES),
+                  (MAX_USER_AUDITS, MAX_USER_AUDITS * MAX_REPORT_BYTES)] if category == "audit" else [
             (MAX_TOTAL_FILES, MAX_TOTAL_BYTES), (MAX_USER_FILES, MAX_USER_BYTES)]
         data = {"owner": owner, "category": category, "kind": kind, "bytes": size, "reference": reference,
                 "expires": int(time.time()) + 600, "state": "pending"}
 
         def operation(tx):
+            if replacement is not None:
+                old = self.api.request("GET", f"{self.rows('objects')}/{replacement}", params={"transactionId": tx})
+                if kind != "audit" or old["owner"] != owner or old["category"] != "audit" or old["state"] != "ready":
+                    raise InputError("audit replacement unavailable; rerun verification")
             for counter, (count_limit, byte_limit) in zip(self.counters(owner, category), limits):
+                # A replacement temporarily holds both blobs; its final usage must fit the normal caps.
+                if replacement is not None:
+                    count_limit += 1
+                    byte_limit += old["bytes"]
                 for column, value, maximum in (("count", 1, count_limit), ("bytes", size, byte_limit)):
                     self.api.request("PATCH", f"{self.rows('quotas')}/{counter}/{column}/increment",
                         json={"value": value, "max": maximum, "transactionId": tx})
@@ -125,7 +135,7 @@ class AppwriteStore(ArtifactStore):
             return self.transaction(operation)
         except AppwriteError as exc:
             if exc.code == 400:
-                raise InputError("artifact storage quota reached; delete inputs or wait for expiry") from exc
+                raise InputError("storage quota reached; delete inputs or wait for expiry") from exc
             raise
 
     def metadata(self, identifier):
@@ -143,21 +153,41 @@ class AppwriteStore(ArtifactStore):
             self.api.request("POST", self.files, data={"fileId": identifier},
                 files={"file": (filename, payload[start:end], "application/octet-stream")}, headers=headers)
 
-    def put(self, identifier, owner, kind, payload, filename, reference):
-        self.reserve(identifier, owner, kind, len(payload), reference)
+    def put(self, identifier, owner, kind, payload, filename, reference, replacement=None):
+        self.reserve(identifier, owner, kind, len(payload), reference, replacement)
         try:
             self.upload_blob(identifier, payload, filename)
             expires = int(time.time()) + (3600 if kind == "audit" else TTL_SECONDS)
-            self.api.request("PATCH", f"{self.rows('objects')}/{identifier}",
-                json={"data": {"state": "ready", "expires": expires}})
-            return expires
+
+            def finish(tx):
+                if replacement is not None:
+                    old = self.api.request("GET", f"{self.rows('objects')}/{replacement}", params={"transactionId": tx})
+                    if old["owner"] != owner or old["category"] != "audit" or old["state"] != "ready":
+                        raise InputError("audit replacement unavailable; rerun verification")
+                    self.api.request("PATCH", f"{self.rows('objects')}/{replacement}",
+                        json={"data": {"state": "retired", "expires": 0}, "transactionId": tx})
+                self.api.request("PATCH", f"{self.rows('objects')}/{identifier}",
+                    json={"data": {"state": "ready", "expires": expires}, **({"transactionId": tx} if tx else {})})
+
+            if replacement is None:
+                finish(None)
+            else:
+                self.transaction(finish)
         except BaseException:
             # Keep failed reservations if cleanup is unavailable; the scheduled reaper releases them.
             try:
-                self.remove(identifier)
+                # A lost commit response may hide a completed replacement; never delete its ready blob.
+                if replacement is None or self.metadata(identifier)["state"] == "pending":
+                    self.remove(identifier)
             except OSError:
                 pass
             raise
+        if replacement is not None:
+            try:
+                self.remove(replacement)
+            except OSError:
+                pass  # The retired row lets scheduled cleanup retry physical deletion.
+        return expires
 
     def commit(self, owner, kind, temporary):
         payload = Path(temporary).read_bytes()
@@ -232,16 +262,16 @@ class AppwriteStore(ArtifactStore):
     def save_audit(self, owner, result):
         self.user_dir(owner)
         payload = json_report(result).encode()
-        for attempt in range(3):
-            try:
-                self.put(uuid4().hex, owner, "audit", payload, "audit.json", result["audit_id"])
-                return
-            except InputError:
-                oldest = self.list_objects(query("equal", "category", ["audit"]),
-                    query("equal", "state", ["ready"]), query("orderAsc", "expires"), query("limit", values=[1]))
-                if not oldest or attempt == 2:
-                    raise
-                self.remove(oldest[0]["$id"])
+        try:
+            self.put(uuid4().hex, owner, "audit", payload, "audit.json", result["audit_id"])
+        except InputError:
+            oldest = self.list_objects(query("equal", "owner", [owner]),
+                query("equal", "category", ["audit"]),
+                query("equal", "state", ["ready"]), query("orderAsc", "expires"), query("limit", values=[1]))
+            own = self.api.request("GET", f"{self.rows('quotas')}/{self.counters(owner, 'audit')[1]}")
+            if own["count"] != MAX_USER_AUDITS or not oldest:
+                raise
+            self.put(uuid4().hex, owner, "audit", payload, "audit.json", result["audit_id"], oldest[0]["$id"])
 
     def load_audit(self, owner, audit_id):
         if not isinstance(audit_id, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", audit_id) is None:

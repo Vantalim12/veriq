@@ -20,6 +20,13 @@ class UnknownSemantics(ValueError):
     pass
 
 
+def workflow_compatibility(workflow):
+    issues = [{"node_id": node.id, "type": node.type, "typeVersion": node.typeVersion,
+               "reason": problem} for node in workflow.nodes.values() if (problem := node_problem(node))]
+    return {"adapter": ADAPTER_VERSION, "node_issues": issues,
+            "note": "Node compatibility is a preflight check; supported types still require supported parameters, ports and reviewed rule assumptions."}
+
+
 def node_problem(node):
     if SUPPORTED.get(node.type) != node.typeVersion:
         return "node type/version is outside the compatibility list"

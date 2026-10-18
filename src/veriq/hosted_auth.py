@@ -34,6 +34,7 @@ class HostedSettings:
     jwks_url: str
     data_dir: Path
     upload_client_id: str = ""
+    environment: str = "development"
 
     def __post_init__(self):
         for value in (self.origin, self.issuer, self.jwks_url):
@@ -42,6 +43,15 @@ class HostedSettings:
             raise InputError("VERIQ_PUBLIC_ORIGIN must have no path or trailing slash")
         if len(self.upload_client_id) > 256 or any(c.isspace() for c in self.upload_client_id):
             raise InputError("VERIQ_UPLOAD_CLIENT_ID must be a public OAuth client ID")
+        if self.environment not in {"development", "production"}:
+            raise InputError("VERIQ_ENVIRONMENT must be development or production")
+        if self.environment == "production":
+            for value in (self.issuer, self.jwks_url):
+                host = urlsplit(value).hostname
+                if host == "clerk.accounts.dev" or host.endswith(".clerk.accounts.dev"):
+                    raise InputError("production requires a Clerk production issuer and JWKS URL")
+            if not self.upload_client_id or self.upload_client_id.startswith("replace-"):
+                raise InputError("production requires VERIQ_UPLOAD_CLIENT_ID")
 
     @property
     def resource(self):
@@ -53,7 +63,8 @@ class HostedSettings:
         try:
             return cls(os.environ["VERIQ_PUBLIC_ORIGIN"], os.environ["VERIQ_OAUTH_ISSUER"],
                        os.environ["VERIQ_JWKS_URL"], Path(os.environ.get("VERIQ_DATA_DIR", "/data")),
-                       os.environ.get("VERIQ_UPLOAD_CLIENT_ID", ""))
+                       os.environ.get("VERIQ_UPLOAD_CLIENT_ID", ""),
+                       os.environ.get("VERIQ_ENVIRONMENT", "development"))
         except KeyError as exc:
             raise InputError("configure VERIQ_PUBLIC_ORIGIN, VERIQ_OAUTH_ISSUER and VERIQ_JWKS_URL before serving") from exc
 

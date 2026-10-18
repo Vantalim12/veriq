@@ -10,10 +10,11 @@ import time
 from uuid import uuid4
 
 from .ingestion import InputError, MAX_BYTES, read_policy, read_workflow
-from .sop import MAX_SOP_BYTES, read_sop
+from .sop import MAX_SOP_BYTES
+from .document_worker import read_sop_isolated
 
 KINDS = {"workflow": (".json", MAX_BYTES, read_workflow), "policy": (".yaml", MAX_BYTES, read_policy),
-         "pdf": (".pdf", MAX_SOP_BYTES, read_sop), "docx": (".docx", MAX_SOP_BYTES, read_sop)}
+         "pdf": (".pdf", MAX_SOP_BYTES, read_sop_isolated), "docx": (".docx", MAX_SOP_BYTES, read_sop_isolated)}
 TTL_SECONDS = 24 * 60 * 60
 MAX_USER_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024

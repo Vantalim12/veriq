@@ -85,3 +85,42 @@ def test_mcp_rejects_oversized_audit_before_caching(monkeypatch):
             await server.call_tool("get_audit_finding", {"audit_id": audit["audit_id"], "finding_id": "REQ-004"})
 
     asyncio.run(check())
+
+
+def test_memory_audits_are_per_owner_and_global_quota_preserves_reports(monkeypatch):
+    from mcp.server.fastmcp import FastMCP
+    from veriq.mcp_server import register_tools
+    from veriq.ingestion import digest
+    identity = ["alice"]
+    sequence = iter(range(30))
+    canonical_verify = verify
+    def unique(*args, **kwargs):
+        result = canonical_verify(*args, **kwargs)
+        result["audit_id"] = digest(next(sequence))
+        return result
+    monkeypatch.setattr("veriq.mcp_server.verify", unique)
+    async def check():
+        server = FastMCP("test")
+        register_tools(server, lambda reference, suffixes: ROOT / "examples" / reference,
+                       lambda: identity[0], cache_seconds=3600)
+        ids = {}
+        for owner in ("alice", "bob"):
+            identity[0] = owner
+            ids[owner] = []
+            for _ in range(9):
+                result = await server.call_tool("verify_workflow_rules", {
+                    "workflow": "purchase-v1.json", "rules": "veriq.rules.yaml"})
+                ids[owner].append(result[1]["audit_id"])
+        for owner in ("alice", "bob"):
+            identity[0] = owner
+            await server.call_tool("export_audit_report", {"audit_id": ids[owner][1]})
+            with pytest.raises(Exception, match="audit unavailable"):
+                await server.call_tool("export_audit_report", {"audit_id": ids[owner][0]})
+        monkeypatch.setattr("veriq.mcp_server.MAX_TOTAL_AUDITS", 16)
+        identity[0] = "charlie"
+        with pytest.raises(Exception, match="quota"):
+            await server.call_tool("verify_workflow_rules", {
+                "workflow": "purchase-v1.json", "rules": "veriq.rules.yaml"})
+        identity[0] = "alice"
+        await server.call_tool("export_audit_report", {"audit_id": ids["alice"][1]})
+    asyncio.run(check())

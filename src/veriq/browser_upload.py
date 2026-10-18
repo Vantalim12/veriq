@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from .hosted_auth import JWTVerifier, UPLOAD_SCOPE, principal
+from .semantics import SUPPORTED
 
 COOKIE = "__Host-veriq_upload"
 LOGIN_SECONDS = 600
@@ -41,7 +42,11 @@ def upload_routes(settings, upload):
         types = {"upload.html": "text/html", "upload.css": "text/css", "upload.js": "text/javascript", "favicon.png": "image/png"}
         if name not in types:
             return Response(status_code=404)
-        return Response(files("veriq").joinpath("web", name).read_bytes(), media_type=types[name],
+        body = files("veriq").joinpath("web", name).read_bytes()
+        if name == "upload.html":
+            nodes = ", ".join(f"{kind.removeprefix('n8n-nodes-base.')} v{version}" for kind, version in SUPPORTED.items())
+            body = body.replace(b"{{COMPATIBILITY_NODES}}", nodes.encode())
+        return Response(body, media_type=types[name],
                         headers={"Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
 
     async def login(request):

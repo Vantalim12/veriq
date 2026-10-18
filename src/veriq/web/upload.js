@@ -111,6 +111,9 @@ for (const form of forms) {
       addArtifact(file, result);
       form.reset();
       status.textContent = "Uploaded. Your artifact ID is below.";
+      if (result.compatibility?.node_issues?.length) {
+        status.textContent += ` ${result.compatibility.node_issues.length} node(s) are outside the supported model. Ask Veriq to inspect the workflow before auditing.`;
+      }
     } catch (error) {
       status.classList.add("error");
       status.textContent = error instanceof TypeError || error instanceof SyntaxError

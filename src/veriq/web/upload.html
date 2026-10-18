@@ -31,6 +31,11 @@
 
     <section aria-labelledby="files-title" class="files-section">
       <div class="section-heading"><h2 id="files-title">2. Upload your files</h2><span>Files expire after 24 hours</span></div>
+      <details class="compatibility">
+        <summary>Check workflow compatibility before uploading</summary>
+        <p>The current static model supports {{COMPATIBILITY_NODES}}. IF supports one numeric or string comparison; Wait supports webhook resume without a timeout.</p>
+        <p>Up to 100 nodes and 1,000 connections. Other node types, versions, expressions, cycles and execution options may require review. Uploading successfully does not mean a workflow passes verification. Veriq never executes your workflow or proves live approval.</p>
+      </details>
       <div class="file-grid">
         <form class="file-card" data-type="workflow">
           <fieldset disabled>

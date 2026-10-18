@@ -11,6 +11,9 @@ import tempfile
 from .ingestion import InputError, MAX_BYTES, MAX_DEPTH
 
 MAX_REPORT_BYTES = 16 * 1024 * 1024
+MAX_USER_AUDITS = 8
+MAX_TOTAL_AUDITS = 1000
+MAX_TOTAL_AUDIT_BYTES = 512 * 1024 * 1024
 # Reports wrap accepted source metadata in finding and traceability envelopes.
 MAX_REPORT_DEPTH = MAX_DEPTH + 8
 

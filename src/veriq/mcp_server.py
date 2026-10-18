@@ -9,7 +9,8 @@ from typing import Any
 import anyio
 
 from .ingestion import InputError, read_policy, read_workflow
-from .reporting import json_report, markdown
+from .reporting import (json_report, markdown, MAX_USER_AUDITS, MAX_TOTAL_AUDITS,
+                        MAX_TOTAL_AUDIT_BYTES)
 from .sop import draft_requirements, read_sop
 from .verifier import verify
 
@@ -36,7 +37,8 @@ def create_server(root: Path):
     return server
 
 
-def register_tools(server, path, principal=lambda: "local", *, cache_seconds=None, scopes=None, audit_store=None):
+def register_tools(server, path, principal=lambda: "local", *, cache_seconds=None, scopes=None, audit_store=None,
+                   document_reader=read_sop):
     """Share canonical operations while the transport supplies its file/identity boundary."""
     from mcp.types import ToolAnnotations
     annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -55,18 +57,27 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
         candidate = read_workflow(path(workflow, {".json"}))
         policy, policy_hash = read_policy(path(rules, {".yaml", ".yml"}))
         reference = read_workflow(path(baseline, {".json"})) if baseline else None
-        document = read_sop(path(sop, {".pdf", ".docx"})) if sop else None
+        document = document_reader(path(sop, {".pdf", ".docx"})) if sop else None
         result = verify(candidate, policy, policy_hash, reference, strict_unknown=strict_unknown,
                         fail_on_all=fail_on_all, document=document)
-        json_report(result)
+        report_bytes = len(json_report(result).encode())
         if audit_store is not None:
             audit_store.save_audit(principal(), result)
             return result
         key = (principal(), result["audit_id"])
-        audits[key] = (time.monotonic(), result)
+        now = time.monotonic()
+        for stale, (created, _, _) in list(audits.items()):
+            if cache_seconds is not None and now - created >= cache_seconds:
+                del audits[stale]
+        own = [entry for entry in audits if entry[0] == key[0] and entry != key]
+        evicted = own[0] if len(own) >= MAX_USER_AUDITS else None
+        retained = {entry: value for entry, value in audits.items() if entry not in (key, evicted)}
+        if len(retained) >= MAX_TOTAL_AUDITS or sum(value[2] for value in retained.values()) + report_bytes > MAX_TOTAL_AUDIT_BYTES:
+            raise InputError("audit storage quota reached; wait for report expiry")
+        if evicted is not None:
+            del audits[evicted]
+        audits[key] = (now, result, report_bytes)
         audits.move_to_end(key)
-        while len(audits) > 8:
-            audits.popitem(last=False)
         return result
 
     def stored(audit_id):
@@ -74,8 +85,8 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
             return audit_store.load_audit(principal(), audit_id)
         key = (principal(), audit_id)
         if key not in audits:
-            raise InputError("audit unavailable; rerun verification (only the last eight audits are retained)")
-        created, result = audits[key]
+            raise InputError("audit unavailable; rerun verification (only the last eight audits per user are retained)")
+        created, result, _ = audits[key]
         if cache_seconds is not None and time.monotonic() - created >= cache_seconds:
             del audits[key]
             raise InputError("audit expired; rerun verification")
@@ -85,7 +96,7 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
     @in_worker
     def ingest_sop_document(relative_path: str) -> dict[str, Any]:
         """Read a text SOP input reference, preserving locations and input hash."""
-        return read_sop(path(relative_path, {".pdf", ".docx"}))
+        return document_reader(path(relative_path, {".pdf", ".docx"}))
 
     @server.tool(annotations=annotations, meta=metadata)
     @in_worker
@@ -137,6 +148,6 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
 
         Interpretations need human review. This tool cannot approve policy or call a model.
         """
-        return draft_requirements(read_sop(path(relative_path, {".pdf", ".docx"}))).model_dump()
+        return draft_requirements(document_reader(path(relative_path, {".pdf", ".docx"}))).model_dump()
 
     return server

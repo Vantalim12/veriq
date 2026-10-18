@@ -44,6 +44,9 @@ p { margin: 0 0 16px; }
 :focus-visible { outline: 3px solid #1654b8; outline-offset: 4px; }
 button:disabled { cursor: default; opacity: .5; }
 .files-section { margin-top: 28px; }
+.compatibility { margin-bottom: 20px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); }
+.compatibility summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.compatibility p { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .section-heading span { font-size: 11px; color: var(--muted); }
 .files-section .section-heading h2 { font-size: 15px; letter-spacing: -.02em; }

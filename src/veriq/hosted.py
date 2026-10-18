@@ -17,9 +17,11 @@ from starlette.routing import Route, request_response
 
 from .artifacts import ArtifactStore, KINDS
 from .hosted_auth import HostedSettings, JWTVerifier, READ_SCOPE, UPLOAD_SCOPE, principal
-from .ingestion import InputError
+from .ingestion import InputError, read_workflow
+from .semantics import workflow_compatibility
 from .mcp_server import register_tools
 from .browser_upload import upload_routes
+from .document_worker import read_sop_isolated
 
 
 class HostedMCP(FastMCP):
@@ -45,7 +47,8 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=True,
             allowed_hosts=[urlsplit(settings.origin).netloc], allowed_origins=[settings.origin]))
     register_tools(server, lambda reference, suffixes: store.resolve(principal(), reference, suffixes),
-                   principal, cache_seconds=3600, scopes=[READ_SCOPE], audit_store=audit_store)
+                   principal, cache_seconds=3600, scopes=[READ_SCOPE], audit_store=audit_store,
+                   document_reader=read_sop_isolated)
     app = server.streamable_http_app()
     upload_slots = anyio.Semaphore(2)
     metadata_url = settings.origin + "/.well-known/oauth-protected-resource/mcp"
@@ -72,7 +75,13 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
                                 if size > limit:
                                     return JSONResponse({"error": "input exceeds the byte limit"}, status_code=413)
                                 output.write(chunk)
+                        compatibility = None
+                        if kind == "workflow":
+                            compatibility = await anyio.to_thread.run_sync(
+                                lambda: workflow_compatibility(read_workflow(temporary)))
                         result = await anyio.to_thread.run_sync(store.commit, owner, kind, temporary)
+                        if compatibility is not None:
+                            result["compatibility"] = compatibility
             return JSONResponse(result, status_code=201)
         except TimeoutError:
             return JSONResponse({"error": "upload timed out"}, status_code=408)

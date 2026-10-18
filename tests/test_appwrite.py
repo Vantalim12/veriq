@@ -261,6 +261,170 @@ def test_cloud_audit_expiry_eviction_and_binary_chunks(tmp_path):
     assert uploads[-1][3]["headers"]["X-Appwrite-ID"] == "chunk-test"
 
 
+def test_audits_rotate_per_owner_and_global_pressure_never_deletes_other_users(tmp_path, monkeypatch):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    for owner in ("a" * 64, "b" * 64):
+        for number in range(9):
+            store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    assert backend.tables["quotas"]["audit-global"]["count"] == 16
+    for owner in ("a" * 64, "b" * 64):
+        assert store.load_audit(owner, "sha256:" + f"{1:064x}")
+        with pytest.raises(InputError):
+            store.load_audit(owner, "sha256:" + f"{0:064x}")
+    monkeypatch.setattr("veriq.appwrite_store.MAX_TOTAL_AUDITS", 16)
+    before = deepcopy(backend.tables)
+    blobs = deepcopy(backend.files)
+    with pytest.raises(InputError, match="quota"):
+        store.save_audit("c" * 64, {"audit_id": "sha256:" + "f" * 64})
+    assert backend.tables["objects"] == before["objects"]
+    assert backend.files == blobs
+
+
+@pytest.mark.parametrize("limit", ["bytes", "count"])
+def test_rejected_audit_replacement_preserves_existing_reports(tmp_path, monkeypatch, limit):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    total = backend.tables["quotas"]["audit-global"]
+    if limit == "bytes":
+        monkeypatch.setattr("veriq.appwrite_store.MAX_TOTAL_AUDIT_BYTES", total["bytes"])
+    else:
+        monkeypatch.setattr("veriq.appwrite_store.MAX_TOTAL_AUDITS", total["count"] - 1)
+    before = deepcopy(backend.tables)
+    blobs = deepcopy(backend.files)
+    with pytest.raises(InputError, match="quota"):
+        store.save_audit(owner, {"audit_id": "sha256:" + "f" * 64, "padding": "x" * 2000})
+    assert backend.tables == before
+    assert backend.files == blobs
+
+
+def test_audit_replacement_can_fill_global_caps_exactly(tmp_path, monkeypatch):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    total = deepcopy(backend.tables["quotas"]["audit-global"])
+    monkeypatch.setattr("veriq.appwrite_store.MAX_TOTAL_AUDITS", total["count"])
+    monkeypatch.setattr("veriq.appwrite_store.MAX_TOTAL_AUDIT_BYTES", total["bytes"])
+    result = {"audit_id": "sha256:" + "f" * 64}
+    store.save_audit(owner, result)
+    assert store.load_audit(owner, result["audit_id"]) == result
+    assert backend.tables["quotas"]["audit-global"] == total
+    assert len(backend.files) == 8
+
+
+@pytest.mark.parametrize("failure", ["upload", "finalize"])
+def test_failed_audit_replacement_preserves_reports_and_quotas(tmp_path, monkeypatch, failure):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    before, blobs = deepcopy(backend.tables), deepcopy(backend.files)
+    request = backend.request
+    def fail_finalize(method, path, **kwargs):
+        payload = kwargs.get("json") or {}
+        if payload.get("transactionId") and payload.get("data", {}).get("state") == "ready":
+            raise AppwriteError(503)
+        return request(method, path, **kwargs)
+    if failure == "upload":
+        backend.fail_upload = True
+    else:
+        monkeypatch.setattr(backend, "request", fail_finalize)
+    with pytest.raises(AppwriteError):
+        store.save_audit(owner, {"audit_id": "sha256:" + "f" * 64})
+    assert backend.tables == before
+    assert backend.files == blobs
+    for number in range(8):
+        assert store.load_audit(owner, "sha256:" + f"{number:064x}")
+
+
+def test_replacement_keeps_old_report_readable_and_retries_transaction_conflicts(tmp_path, monkeypatch):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    upload = store.upload_blob
+    def staged(*args):
+        assert store.load_audit(owner, "sha256:" + "0" * 64)
+        assert backend.tables["quotas"]["audit-global"]["count"] == 9
+        with pytest.raises(InputError):
+            store.save_audit(owner, {"audit_id": "sha256:" + "e" * 64})
+        upload(*args)
+        backend.conflict = True
+    monkeypatch.setattr(store, "upload_blob", staged)
+    result = {"audit_id": "sha256:" + "f" * 64}
+    store.save_audit(owner, result)
+    assert store.load_audit(owner, result["audit_id"]) == result
+    assert backend.tables["quotas"]["audit-global"]["count"] == len(backend.files) == 8
+
+
+def test_retired_audit_cleanup_is_retryable_and_still_counts_against_quota(tmp_path, monkeypatch):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    oldest = next(iter(backend.files))
+    request = backend.request
+    def fail_delete(method, path, **kwargs):
+        if method == "DELETE" and path == f"{store.files}/{oldest}":
+            raise AppwriteError(503)
+        return request(method, path, **kwargs)
+    monkeypatch.setattr(backend, "request", fail_delete)
+    result = {"audit_id": "sha256:" + "f" * 64}
+    store.save_audit(owner, result)
+    assert store.load_audit(owner, result["audit_id"]) == result
+    assert backend.tables["objects"][oldest]["state"] == "retired"
+    assert backend.tables["quotas"]["audit-global"]["count"] == len(backend.files) == 9
+    with pytest.raises(InputError):
+        store.save_audit(owner, {"audit_id": "sha256:" + "e" * 64})
+    monkeypatch.setattr(backend, "request", request)
+    assert store.prune() == 1
+    assert backend.tables["quotas"]["audit-global"]["count"] == len(backend.files) == 8
+
+
+def test_lost_replacement_commit_response_does_not_delete_completed_report(tmp_path, monkeypatch):
+    backend = MemoryAppwrite()
+    store = AppwriteStore(tmp_path, backend)
+    owner = "a" * 64
+    for number in range(8):
+        store.save_audit(owner, {"audit_id": "sha256:" + f"{number:064x}"})
+    transaction = store.transaction
+    def lost_response(operation):
+        result = transaction(operation)
+        if operation.__name__ == "finish":
+            raise AppwriteError(503)
+        return result
+    monkeypatch.setattr(store, "transaction", lost_response)
+    result = {"audit_id": "sha256:" + "f" * 64}
+    with pytest.raises(AppwriteError):
+        store.save_audit(owner, result)
+    assert store.load_audit(owner, result["audit_id"]) == result
+    assert store.prune() == 1
+    assert backend.tables["quotas"]["audit-global"]["count"] == len(backend.files) == 8
+
+
+def test_acceptance_runner_exercises_real_bridge_and_persistent_storage(cloud, settings, signing_key):
+    from test_production_readiness import acceptance_module
+    backend, invoke = cloud
+    def transport(request):
+        result = invoke(request.url.path, method=request.method, body=request.content,
+                        user=None, headers=dict(request.headers))
+        return httpx.Response(result.status, content=result.body, headers=result.headers)
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        result = acceptance_module().run_checks(client, settings.origin,
+            bearer(signing_key, settings, "alice")[7:], bearer(signing_key, settings, "bob")[7:])
+    assert result["status"] == "passed"
+    assert len(result["checks"]) == 6
+    assert all(row["category"] == "audit" for row in backend.tables["objects"].values())
+
+
 def test_appwrite_http_boundary_keeps_json_download_binary_and_secrets_private():
     seen = []
     def handler(request):

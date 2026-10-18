@@ -1,6 +1,6 @@
 # Phase 2: Docker, HTTPS and plugin packaging
 
-This phase implements hosted distribution using the existing verifier. It does not add live n8n access, workflow execution, auto-repair, billing or an audit dashboard. The owner selected **Appwrite Cloud for hosting and Clerk for authentication**. The API is deployed for development testing; no public directory listing has been created. The browser upload page requires deployment of the updated source and the configuration below.
+This phase implements hosted distribution using the existing verifier. It does not add live n8n access, workflow execution, auto-repair, billing or an audit dashboard. The owner selected **Appwrite Cloud for hosting and Clerk for authentication**. The API is deployed for development testing; no public directory listing has been created. The browser upload page is live for pilot use; updated code still needs redeployment after changes.
 
 ## Selected target: Appwrite Cloud + Clerk
 
@@ -10,7 +10,7 @@ The Appwrite Functions adapter, private Storage backend, TablesDB ownership/quot
 
 The Docker Compose instructions below remain an alternative Docker-host deployment procedure. Appwrite Cloud uses its own HTTPS function endpoint and durable services instead of Caddy, a persistent `/data` mount and a process-local audit cache.
 
-The development issuer, MCP hostname and public client ID are configured; see [Clerk configuration](clerk-configuration.md). Still needed: private Appwrite resources/runtime credentials, activation, a real OAuth sign-in test, and publisher/support/legal URLs. Keep the resource tied to the MCP hostname before issuing tokens or building a release package.
+The development issuer, MCP hostname and public client ID are configured; see [Clerk configuration](clerk-configuration.md). Private Appwrite resources, runtime credentials, activation, browser sign-in/uploads and ChatGPT account linking have been exercised. Production Clerk, a complete two-account live audit and publisher/support/legal URLs remain pending. Keep the resource tied to the MCP hostname before issuing tokens or building a release package.
 
 ## Start with Docker + HTTPS
 
@@ -94,9 +94,9 @@ curl --fail-with-body -X DELETE "$VERIQ_URL/artifacts/ARTIFACT_ID" \
   -H "Authorization: Bearer $VERIQ_ACCESS_TOKEN"
 ```
 
-In the Docker deployment, audit results remain in memory, globally limited to the last eight completed audits; access is user-scoped and reads expire after one hour. Restarting or eviction requires rerunning verification. Appwrite stores those reports durably with the same one-hour access TTL; see its guide for cleanup and quotas. Input-file expiry/deletion does not erase an already-stored audit immediately. Responses use `Cache-Control: no-store`. Body/token values are excluded from access logs; file contents may appear in source citations and audit results intentionally.
+In the Docker deployment, audit results remain in memory, limited to the last eight completed audits per owner, with global caps of 1,000 audits/512 MiB; access is user-scoped and reads expire after one hour. Restarting or eviction requires rerunning verification. Appwrite stores those reports durably with the same one-hour access TTL; see its guide for cleanup and quotas. Input-file expiry/deletion does not erase an already-stored audit immediately. Responses use `Cache-Control: no-store`. Body/token values are excluded from access logs; file contents may appear in source citations and audit results intentionally.
 
-The persistent volume is not a database or a backup policy. Operator backups, underlying disk snapshots and provider logs have their own retention. The service is for controlled single-instance evaluation; isolate untrusted document parsing more strongly before a broad public rollout.
+The persistent volume is not a database or a backup policy. Operator backups, underlying disk snapshots and provider logs have their own retention. Hosted SOP parsing uses a resource-limited Linux subprocess without runtime credentials. This protects request workers from parser crashes and overruns; it is not a kernel or filesystem sandbox. See [production readiness and acceptance](production-readiness.md) for the remaining live checks.
 
 ## Build the plugin ZIP
 

@@ -158,6 +158,10 @@ def test_browser_csrf_invalid_files_and_no_directory_traversal(browser):
     assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
     assert page.headers["cache-control"] == "no-store"
     assert 'href="/upload/assets/favicon.png"' in page.text
+    from veriq.semantics import SUPPORTED
+    assert "{{COMPATIBILITY_NODES}}" not in page.text
+    for kind, version in SUPPORTED.items():
+        assert f"{kind.removeprefix('n8n-nodes-base.')} v{version}" in page.text
     assert "img-src 'self'" in page.headers["content-security-policy"]
     favicon = client.get("/upload/assets/favicon.png")
     assert favicon.status_code == 200 and favicon.headers["content-type"] == "image/png"
@@ -171,6 +175,21 @@ def test_unconfigured_upload_login_fails_closed(settings):
         assert client.get("/upload").status_code == 200
         assert client.get("/upload/session").json() == {"configured": False, "signed_in": False}
         assert client.get("/upload/login", follow_redirects=False).status_code == 503
+
+
+def test_upload_reports_unknown_node_versions_without_claiming_verification(browser):
+    import json
+    client, settings, _ = browser
+    sign_in(client, settings)
+    workflow = json.loads((ROOT / "examples/purchase-v1.json").read_text())
+    workflow["nodes"][0]["typeVersion"] = 999
+    response = client.post("/upload/artifacts/workflow", content=json.dumps(workflow).encode(),
+        headers={"Origin": settings.origin, "Content-Type": "application/octet-stream"})
+    assert response.status_code == 201
+    coverage = response.json()["compatibility"]
+    assert coverage["node_issues"][0]["node_id"] == workflow["nodes"][0]["id"]
+    assert coverage["node_issues"][0]["typeVersion"] == 999
+    assert "preflight" in coverage["note"]
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "timeout", "malformed", "oversize", "wrong_audience", "missing_scope"])
