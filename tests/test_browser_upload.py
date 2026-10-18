@@ -157,6 +157,11 @@ def test_browser_csrf_invalid_files_and_no_directory_traversal(browser):
     assert page.status_code == 200
     assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
     assert page.headers["cache-control"] == "no-store"
+    assert 'href="/upload/assets/favicon.png"' in page.text
+    assert "img-src 'self'" in page.headers["content-security-policy"]
+    favicon = client.get("/upload/assets/favicon.png")
+    assert favicon.status_code == 200 and favicon.headers["content-type"] == "image/png"
+    assert favicon.content.startswith(b"\x89PNG\r\n\x1a\n")
     for name in ("upload.css", "upload.js"):
         assert client.get("/upload/assets/" + name).status_code == 200
 

@@ -24,7 +24,7 @@ veriq = "veriq.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-veriq = ["web/*.html", "web/*.css", "web/*.js"]
+veriq = ["web/*.html", "web/*.css", "web/*.js", "web/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

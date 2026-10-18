@@ -18,7 +18,7 @@ from .hosted_auth import JWTVerifier, UPLOAD_SCOPE, principal
 COOKIE = "__Host-veriq_upload"
 LOGIN_SECONDS = 600
 SESSION_SECONDS = 3600
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; "
        "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
 
@@ -38,7 +38,7 @@ def upload_routes(settings, upload):
 
     async def asset(request):
         name = request.path_params.get("name", "upload.html")
-        types = {"upload.html": "text/html", "upload.css": "text/css", "upload.js": "text/javascript"}
+        types = {"upload.html": "text/html", "upload.css": "text/css", "upload.js": "text/javascript", "favicon.png": "image/png"}
         if name not in types:
             return Response(status_code=404)
         return Response(files("veriq").joinpath("web", name).read_bytes(), media_type=types[name],
