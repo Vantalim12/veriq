@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Veriq — catch the bypass before deployment</title>
+  <desc id="desc">Static checks for exported n8n workflows. In the synthetic procurement example, the baseline's high-value route crosses approval-gate. The candidate bypasses that control, introducing a REQ-004 failure. Simplified paths show the threshold onward; no workflow is executed.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ADD4FA"/>
+      <stop offset="1" stop-color="#FAF3DE"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9" fill="none" stroke="#555B62" stroke-width="1.5"/>
+    </marker>
+    <marker id="fail-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9" fill="none" stroke="#9C2B24" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="680" rx="16" fill="#F5F8FC"/>
+  <path d="M16 0H1184Q1200 0 1200 16V354H0V16Q0 0 16 0Z" fill="url(#sky)"/>
+  <g id="identity" fill="#141414" font-family="Arial, Helvetica, sans-serif">
+    <text x="56" y="120" font-size="100" font-weight="700" letter-spacing="-6">veriq<tspan fill="#2563EB">.</tspan></text>
+    <text x="1144" y="66" text-anchor="end" font-size="22">n8n / static workflow checks</text>
+    <text x="56" y="216" font-family="Georgia, 'Times New Roman', serif" font-size="60">Detect broken business rules</text>
+    <text x="56" y="286" font-size="58" letter-spacing="-1.5">before your automations go live.</text>
+  </g>
+  <g id="evidence" font-family="Arial, Helvetica, sans-serif" fill="#141414">
+    <text x="56" y="398" font-size="22" font-weight="700">THE APPROVAL BYPASS</text>
+    <text x="1144" y="398" text-anchor="end" font-size="20" fill="#555B62">Synthetic example · simplified paths</text>
+    <path d="M56 420H1144" stroke="#D9DFE5"/>
+    <text x="56" y="473" font-size="24">Baseline</text>
+    <rect x="194" y="447" width="90" height="36" rx="4" fill="#E7F2E8"/>
+    <text x="239" y="472" text-anchor="middle" font-size="22" font-weight="700" fill="#215B32">PASS</text>
+    <g font-family="ui-monospace, 'DejaVu Sans Mono', monospace" font-size="25">
+      <text x="330" y="473">threshold</text>
+      <text x="632" y="473">approval-gate</text>
+      <text x="950" y="473">fulfillment</text>
+    </g>
+    <g fill="none" stroke="#555B62" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#arrow)">
+      <path d="M484 465H610"/>
+      <path d="M840 465H928"/>
+    </g>
+    <text x="56" y="548" font-size="24">Candidate</text>
+    <rect x="194" y="522" width="90" height="36" rx="4" fill="#FBEAE8"/>
+    <text x="239" y="547" text-anchor="middle" font-size="22" font-weight="700" fill="#9C2B24">FAIL</text>
+    <g font-family="ui-monospace, 'DejaVu Sans Mono', monospace" font-size="25">
+      <text x="330" y="548">threshold</text>
+      <text x="950" y="548">fulfillment</text>
+    </g>
+    <path d="M484 540H928" fill="none" stroke="#9C2B24" stroke-width="2.5" marker-end="url(#fail-arrow)"/>
+    <rect x="610" y="521" width="230" height="36" rx="4" fill="#FBEAE8"/>
+    <text x="725" y="546" text-anchor="middle" font-size="22" fill="#9C2B24">control bypassed</text>
+  </g>
+  <g id="finding" font-family="Arial, Helvetica, sans-serif">
+    <path d="M0 600H1200V664Q1200 680 1184 680H16Q0 680 0 664Z" fill="#FFEF45"/>
+    <text x="56" y="650" font-size="25" font-weight="700" fill="#141414">REQ-004 / INTRODUCED</text>
+    <text x="1144" y="650" text-anchor="end" font-size="22" fill="#141414">Exact paths. Reviewed rules. Explicit limits.</text>
+  </g>
+</svg>

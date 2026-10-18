@@ -1,12 +1,41 @@
 # Veriq
 
-Detect broken business rules before your automations go live.
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="Veriq — detect broken business rules before your automations go live. In the synthetic procurement example, the baseline routes through approval-gate; the candidate bypasses it and introduces a REQ-004 failure.">
+</p>
 
-Veriq's core is a local, read-only Python CLI that checks exported n8n workflow configuration against reviewed YAML rules. It provides bounded path evidence, baseline comparison, and JSON/Markdown reports. This is an early preview with a deliberately narrow compatibility list, not full n8n execution verification or compliance certification.
+**Check exported n8n workflows against reviewed business rules—without running them.** Veriq is a local Python CLI that compares workflow versions and produces JSON and Markdown reports with exact path evidence.
 
-## Install and run
+[Try the example](#quickstart) · [Supported semantics](docs/supported-n8n-semantics.md) · [Write rules](docs/rule-format.md) · [SOP & MCP guide](docs/sop-and-mcp.md)
 
-Python 3.12 or newer is required. From this repository:
+> **Early preview.** Veriq checks a bounded static model with a narrow compatibility list. It does not prove live execution correctness, manager authorization, or regulatory compliance.
+
+## One changed connection. One broken rule.
+
+The [synthetic procurement SOP](examples/procurement-sop.md) requires high-value purchases to cross a reviewed blocking control. The [baseline](examples/purchase-v1.json) satisfies that rule. The [candidate](examples/purchase-v2.json) connects the threshold's true output directly to fulfillment, bypassing `approval-gate`.
+
+The hero simplifies the baseline route: `threshold → review-request → approval-gate → approved-route → fulfillment`.
+
+| Rule | Baseline | Candidate | Comparison |
+|---|---|---|---|
+| `REQ-004` · Required control | PASS | **FAIL** | **INTRODUCED** |
+| `REQ-THRESHOLD` · Amount > PHP 10,000 | PASS | PASS | PERSISTING |
+| `REQ-LOW` · Low-value route exclusion | PASS | PASS | PERSISTING |
+
+Veriq identifies the counterexample:
+
+```text
+intake → intake-route → threshold → fulfillment
+                       └─ true output bypasses approval-gate
+```
+
+The report includes node IDs, connections, and the condition's JSON pointer so a reviewer can trace the finding back to the export. This example contains synthetic data and does not implement a live approval or fulfillment service.
+
+<a id="install-and-run"></a>
+
+## Quickstart
+
+Requires **Python 3.12+**. From the repository root:
 
 ```bash
 python3 -m venv .venv
@@ -14,13 +43,13 @@ source .venv/bin/activate
 python -m pip install -c constraints.txt -e '.[test]'
 ```
 
-Inspect the synthetic workflow without executing it:
+**1. Inspect the export.** The workflow is read as data, never executed.
 
 ```bash
 veriq inspect --workflow examples/purchase-v1.json
 ```
 
-Check the passing baseline:
+**2. Verify the passing baseline.** Expected exit: **0**.
 
 ```bash
 veriq verify \
@@ -29,7 +58,7 @@ veriq verify \
   --output-dir reports/baseline
 ```
 
-Detect the deliberately introduced bypass; this command should return **exit 1**:
+**3. Catch the introduced bypass.** Expected exit: **1**.
 
 ```bash
 veriq verify \
@@ -39,58 +68,87 @@ veriq verify \
   --output-dir reports/regression
 ```
 
-The result identifies `REQ-004` as `FAIL / INTRODUCED` and gives the path `intake → intake-route → threshold → fulfillment`, including the true-output connection. Read `reports/regression/audit.md`, or retrieve canonical evidence:
+Open `reports/regression/audit.md`, or retrieve the canonical evidence:
 
 ```bash
 veriq explain --report reports/regression/audit.json --finding REQ-004
-python -m pytest -q
 ```
 
-Core verification makes no network requests and needs no model/API key after installation. The [synthetic SOP](examples/procurement-sop.md) explains the case; the example does not implement a live approval or fulfillment service.
+Core verification makes **no network requests** and needs **no model or API key** after installation.
 
-## Rules and supported semantics
+## How the check works
 
-The three rule types are `must_pass_through`, `forbid_path`, and `require_condition`. Every enforced rule includes reviewer/date metadata; enforcement assumes the user supplied a genuinely reviewed policy through their Git/team process. Metadata is not authenticated signoff.
+1. **Import** an exported n8n workflow and a reviewed YAML policy.
+2. **Verify** supported paths and conditions against the policy.
+3. **Compare** candidate and baseline under the same rules to classify regressions.
+4. **Review** exact evidence, unresolved coverage, and the resulting CI gate.
 
-See [the rule format](docs/rule-format.md), [machine-readable policy schema](docs/policy.schema.json), and [supported n8n semantics](docs/supported-n8n-semantics.md). Initial adapters accept **typeVersion 1 only** for Webhook, No Operation, IF, and webhook-resumed Wait without timeout. IF supports one literal numeric comparison or string equality/inequality, with a constrained `$json.field` reference and explicitly declared field types. Arbitrary expressions, Code nodes, unknown versions, disabled nodes, loops, and non-default error routing stay review-needed/unsupported.
+Three rule types cover the core checks:
 
-The model assumes declared fields are present and correctly typed. A Wait is a configured blocking waypoint; Veriq does not prove manager identity, authorization, connector internals, or live execution correctness. Field identity after a Wait is unresolved for downstream conditions.
+| Rule type | Question it answers |
+|---|---|
+| `must_pass_through` | Must a route cross a specified control? |
+| `forbid_path` | Can a prohibited route exist? |
+| `require_condition` | Does a node retain the reviewed condition? |
 
-## Exit policy
+Every enforced rule needs reviewer/date metadata. This records the review declaration; it is **not authenticated signoff**. Use your Git/team review process to supply genuinely approved policies. See the [example policy](examples/veriq.rules.yaml), [rule format](docs/rule-format.md), and [policy schema](docs/policy.schema.json).
+
+## Know the boundary
+
+Initial adapters accept **typeVersion 1 only** for Webhook, No Operation, IF, and webhook-resumed Wait without timeout. IF supports one literal numeric comparison or string equality/inequality, a constrained `$json.field` reference, and explicitly declared field types.
+
+- Arbitrary expressions, Code nodes, unknown versions, disabled nodes, loops, and non-default error routing remain review-needed or unsupported.
+- Declared fields are assumed present and correctly typed. A Wait proves a configured blocking waypoint; manager identity, authorization, connector internals, and live behavior need separate verification.
+- Field identity after a Wait is unresolved for downstream conditions. Path exploration and evidence are bounded; a proven failure remains **FAIL** even when other paths are unknown.
+
+Read the [supported n8n semantics](docs/supported-n8n-semantics.md) before applying a gate to your own exports.
+
+## Use it in CI
+
+The [workflow-check example](.github/workflows/veriq-example.yml) compares a candidate JSON export against the base revision's policy and baseline. It installs the verifier from the reviewed base; candidate program code is not installed or executed. **The base branch must already contain the verifier.**
+
+The demo checks changes to `examples/purchase-v1.json`; `purchase-v2.json` is reserved for the local failure demo. Report artifacts are retained after a failed check. Protect workflow and policy review, and choose artifact access and retention for confidential data before adopting it.
 
 | Exit | Meaning |
 |---|---|
-| 0 | No blocking proven violation; warnings or historical failures may remain |
-| 1 | Introduced deterministic failure in comparison mode, or any proven failure in standalone mode |
-| 2 | Invalid input/policy, engine error, or inability to write the requested reports |
-| 3 | Unresolved coverage under `--strict-unknown`, when no blocking failure/error takes precedence |
+| **0** | No blocking proven violation; warnings or historical failures may remain |
+| **1** | Introduced deterministic failure in comparison mode, or any proven failure in standalone mode |
+| **2** | Invalid input/policy, engine error, or report write failure |
+| **3** | Unresolved coverage with `--strict-unknown`, unless a blocking failure/error takes precedence |
 
-Use `--fail-on-all-verified-failures` to block existing failures too. A proven failure remains FAIL when other paths are unknown. Without a baseline, regression classification is null. `--warnings-only` preserves the canonical gate result/verdicts but returns process exit 0 for finding-based outcomes; input/tool errors still return 2. Use it when evaluating a new policy before enabling gates.
+Use `--fail-on-all-verified-failures` to block existing failures too. Without a baseline, regression classification is null. To evaluate a policy before enabling gates, `--warnings-only` keeps canonical verdicts and gate results while returning process exit 0 for finding-based outcomes; input/tool errors still return 2.
 
-## CI
+[Core CI](.github/workflows/ci.yml) targets Python 3.12 and 3.14. Actions use full commit pins and dependencies use [constraints.txt](constraints.txt). [Security scans](.github/workflows/security.yml) check Git history with Gitleaks and pinned dependencies with pip-audit; scanner errors and findings fail their jobs. See [publishing checks](docs/publishing-security.md) for pin details, scan scope, and pending networked validation.
 
-[Core CI](.github/workflows/ci.yml) tests Python 3.12 and 3.14. The [workflow-check example](.github/workflows/veriq-example.yml) analyzes a candidate JSON export against the base revision's approved policy and baseline, installing the verifier from that reviewed base. Candidate program code is not installed or executed for that check. The base branch must already contain the verifier before this workflow is usable.
+## Beyond the CLI
 
-The example checks changes to `examples/purchase-v1.json`; the deliberately broken `purchase-v2.json` is reserved for the local failure demo. Artifacts are retained even on a failed check. These examples contain synthetic data; choose access and retention deliberately before applying the workflow to confidential reports. Protect the repository's workflow/policy review process before relying on its gate.
+**SOP authoring & local MCP.** Extract located PDF/DOCX text, draft source-backed requirements, review them explicitly, and trace approved rules to their source. Optional local Ollama assistance and a read-only MCP server are available. Drafts cannot enforce rules, and MCP cannot approve them.
 
-GitHub Actions are pinned to full commit hashes verified against the official v7.0.0 releases of [checkout](https://github.com/actions/checkout/releases/tag/v7.0.0), [setup-python](https://github.com/actions/setup-python/releases/tag/v7.0.0), and [upload-artifact](https://github.com/actions/upload-artifact/releases/tag/v7.0.0). The verifier source is pinned to the reviewed base commit and Python dependencies are constrained by [constraints.txt](constraints.txt). Review upstream changes before updating these pins.
+```bash
+python -m pip install -c constraints.txt -e '.[test,sop,mcp]'
+```
 
-[Security scans](.github/workflows/security.yml) check Git history with Gitleaks and the complete pinned Python dependency inventory with pip-audit. Downloads, scanner errors, secrets and reported vulnerabilities fail their respective jobs. See [the publishing checks](docs/publishing-security.md) for scope, local commands and the pending first networked scan.
+Follow the [runnable SOP and MCP guide](docs/sop-and-mcp.md).
 
-## SOP authoring and MCP
+**Hosted deployment.** The OAuth-protected HTTP MCP service adds private expiring uploads and a plugin ZIP builder. The selected deployment uses Appwrite Cloud Functions, private Storage, transactional TablesDB quotas, scheduled expiry cleanup, and Clerk OAuth. The `/upload` page accepts workflow JSON, SOP PDF/DOCX, and reviewed YAML rules; sign in with the same Clerk account used in ChatGPT and pass the returned artifact IDs to Veriq.
 
-P1 adds located PDF/DOCX extraction, source-backed requirement drafts, explicit file-based human review, validated SOP-to-rule traceability, optional local Ollama assistance, and a read-only local MCP server. Install with `python -m pip install -c constraints.txt -e '.[test,sop,mcp]'`, then follow the [runnable SOP and MCP guide](docs/sop-and-mcp.md). Drafts cannot enforce rules, and MCP cannot approve them.
+[Appwrite deployment](docs/appwrite-deployment.md) · [Docker + HTTPS](docs/hosted-deployment.md) · [Browser upload setup](docs/hosted-deployment.md#browser-upload-page) · [Clerk configuration](docs/clerk-configuration.md)
 
-## Hosted deployment
+## Development & release status
 
-Phase 2 adds an OAuth-protected HTTP MCP service, private expiring uploads and a plugin ZIP builder. The selected Appwrite Cloud deployment includes Functions entry points, private Storage, transactional TablesDB quotas and scheduled expiry cleanup, with Clerk OAuth authentication. Follow the [Appwrite deployment guide](docs/appwrite-deployment.md). The [Docker + HTTPS option](docs/hosted-deployment.md) remains available. Clerk development-instance configuration is recorded in [the configuration guide](docs/clerk-configuration.md).
+Run the local suite after installing the test extra:
 
-The browser upload page at `/upload` supports workflow JSON, SOP PDF/DOCX and reviewed rules YAML. Configure `VERIQ_UPLOAD_CLIENT_ID` and register the exact `<public-origin>/upload/callback` in Clerk before deploying this version. Sign in with the same Clerk account used in ChatGPT, then copy the returned artifact IDs into your Veriq requests. See [browser upload setup](docs/hosted-deployment.md#browser-upload-page).
+```bash
+python -m pytest -q
+```
 
-## Current phase
+The core includes bounded ingestion, strict policy validation, four pinned node adapters, three rule types, conservative path feasibility, validated evidence references, baseline comparison, stable finding fingerprints, CLI reports, synthetic fixtures, and CI definitions.
 
-Implemented: bounded ingestion, strict policy validation, four pinned node adapters, three rule types, conservative path feasibility, validated evidence references, baseline diff, stable finding fingerprints, CLI, reports, synthetic fixtures, and CI definitions.
+The [evaluation record](docs/evaluation.md) distinguishes measured local checks from pending validation. User interviews, pilot reviews, an independent held-out benchmark, and an actual GitHub-hosted CI run remain required before claiming the P0 release gate is complete. SOP/model validation also remains pending; a website/dashboard is later work.
 
-The [evaluation record](docs/evaluation.md) separates measured local checks from pending validation. Real user interviews, pilot reviews, an independent held-out benchmark, and an actual GitHub-hosted CI run are still required before claiming the P0 release gate is complete. P1 implementation and its remaining model/pilot validation are documented in the evaluation record; a website/dashboard is later.
+<details>
+<summary>Product and architecture context</summary>
 
-Product context: [PRD](context/productRequirementDocument.md), [technical requirements](context/technicalRequirementDocument.md), [app flow](context/appFlow.md), [data model](context/databaseSchema.md), [design brief](context/designBrief.md), and [glossary](CONTEXT.md).
+[Product requirements](context/productRequirementDocument.md) · [Technical requirements](context/technicalRequirementDocument.md) · [App flow](context/appFlow.md) · [Data model](context/databaseSchema.md) · [Design brief](context/designBrief.md) · [Glossary](CONTEXT.md)
+
+</details>
