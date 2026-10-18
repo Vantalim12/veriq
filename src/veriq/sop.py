@@ -19,6 +19,9 @@ MAX_TEXT = 120_000
 MAX_PARAGRAPHS = 3000
 MAX_CANDIDATES = 100
 Hash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+REQUIREMENT_LABEL = re.compile(r"^[ \t]*(REQ-\d+)\b(?:[ \t]*[|:.-][ \t]*|\s+)", re.M | re.I)
+NORMATIVE_WORDS = re.compile(r"\b(must|shall|require[ds]?|may|can|permitted|allowed|only if|unless|except|before)\b", re.I)
+VERIFIER_DIRECTIVE = re.compile(r"\A(?:Veriq|the verifier|the verification (?:tool|engine))\s+(?:must|shall|should|may|can)\b", re.I)
 
 
 class SourceSpan(Contract):
@@ -35,6 +38,7 @@ class SourceSpan(Contract):
 
 class Candidate(Contract):
     id: Identifier
+    requirement_id: Identifier | None = None
     status: Literal["draft"] = "draft"
     source: SourceSpan
     actor: str | None = None
@@ -56,10 +60,18 @@ class Draft(Contract):
     document: dict
     generator: str
     candidates: Annotated[list[Candidate], Field(max_length=MAX_CANDIDATES)]
+    verification_instructions: Annotated[list[SourceSpan], Field(max_length=MAX_CANDIDATES)] = Field(default_factory=list)
 
     @property
     def content_hash(self):
-        return digest(self.model_dump())
+        value = self.model_dump()
+        # Preserve hashes of older drafts that lack the new optional metadata.
+        if not self.verification_instructions:
+            value.pop("verification_instructions")
+        for candidate in value["candidates"]:
+            if candidate["requirement_id"] is None:
+                candidate.pop("requirement_id")
+        return digest(value)
 
 
 class Decision(Contract):
@@ -173,22 +185,39 @@ def validate_span(value, document):
     return span
 
 
+def heuristic_proposals(document):
+    for block in document["blocks"]:
+        # shortcut: labeled units stay within a paragraph/page; multi-block grouping needs multi-span citations.
+        for paragraph in re.finditer(r"\S.*?(?=\n[ \t]*\n|\Z)", block["text"], re.S):
+            text = paragraph.group()
+            labels = list(REQUIREMENT_LABEL.finditer(text))
+            boundaries = [0, *[label.start() for label in labels if label.start() > 0], len(text)]
+            for start, end in zip(boundaries, boundaries[1:]):
+                part = text[start:end]
+                label = REQUIREMENT_LABEL.match(part)
+                if label:
+                    pieces = [(part, start, label.group(1))]
+                else:
+                    pieces = [(match.group(), start + match.start(), None)
+                              for match in re.finditer(r".+?(?:[.!?](?=\s|$)|$)", part, re.S)]
+                for value, offset, requirement_id in pieces:
+                    quote = value.strip()
+                    if quote and (requirement_id or NORMATIVE_WORDS.search(quote) or VERIFIER_DIRECTIVE.search(quote)):
+                        position = paragraph.start() + offset + value.index(quote)
+                        yield ({"block_id": block["id"], "quote": quote, "interpretation": quote}, position, requirement_id)
+
+
 def draft_requirements(document, model=None):
     candidates = []
+    instructions = []
     if model:
         from .local_model import propose
-        proposals = [(proposal, None) for proposal in propose(document, model)]
+        proposals = [(proposal, None, None) for proposal in propose(document, model)]
     else:
-        proposals = []
-        for block in document["blocks"]:
-            for match in re.finditer(r".+?(?:[.!?](?=\s|$)|$)", block["text"], re.S):
-                quote = match.group().strip()
-                if re.search(r"\b(must|shall|required?|only if|unless|before)\b", quote, re.I):
-                    start = match.start() + match.group().index(quote)
-                    proposals.append(({"block_id": block["id"], "quote": quote, "interpretation": quote}, start))
+        proposals = list(heuristic_proposals(document))
     if len(proposals) > MAX_CANDIDATES:
         raise InputError("more than 100 requirement candidates; split the SOP into smaller documents")
-    for proposal, start in proposals:
+    for proposal, start, requirement_id in proposals:
         if not isinstance(proposal, dict) or set(proposal) != {"block_id", "quote", "interpretation"}:
             raise InputError("invalid model candidate shape")
         block = next((b for b in document["blocks"] if b["id"] == proposal["block_id"]), None)
@@ -200,8 +229,15 @@ def draft_requirements(document, model=None):
             start = block["text"].index(quote)
         span = span_for(document, block, start, start + len(quote))
         validate_span(span.model_dump(), document)
-        candidates.append(Candidate(id=f"CAND-{len(candidates) + 1:03}", source=span, interpretation=proposal["interpretation"]))
-    return Draft(document=document_reference(document), generator=f"ollama:{model}" if model else "heuristic-1", candidates=candidates)
+        label = REQUIREMENT_LABEL.match(quote)
+        requirement_id = requirement_id or (label.group(1) if label else None)
+        if requirement_id is None and VERIFIER_DIRECTIVE.search(quote):
+            instructions.append(span)
+        else:
+            candidates.append(Candidate(id=f"CAND-{len(candidates) + 1:03}", requirement_id=requirement_id,
+                                        source=span, interpretation=proposal["interpretation"]))
+    return Draft(document=document_reference(document), generator=f"ollama:{model}" if model else "heuristic-2",
+                 candidates=candidates, verification_instructions=instructions)
 
 
 def approve_draft(draft, review, document):

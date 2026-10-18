@@ -1,9 +1,12 @@
 """Local stdio tools restricted to a caller-selected filesystem root."""
 
 from collections import OrderedDict
+from functools import partial, wraps
 import time
 from pathlib import Path
 from typing import Any
+
+import anyio
 
 from .ingestion import InputError, read_policy, read_workflow
 from .reporting import json_report, markdown
@@ -39,6 +42,14 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
     annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
     metadata = {"securitySchemes": [{"type": "oauth2", "scopes": scopes}]} if scopes else None
     audits = OrderedDict()
+    # Serialize tool work to protect the cache and shared download paths without blocking HTTP.
+    tool_slots = anyio.CapacityLimiter(1)
+
+    def in_worker(function):
+        @wraps(function)
+        async def run(*args, **kwargs):
+            return await anyio.to_thread.run_sync(partial(function, *args, **kwargs), limiter=tool_slots)
+        return run
 
     def audit(workflow, rules, baseline=None, sop=None, strict_unknown=False, fail_on_all=False):
         candidate = read_workflow(path(workflow, {".json"}))
@@ -71,11 +82,13 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
         return result
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def ingest_sop_document(relative_path: str) -> dict[str, Any]:
         """Read a text SOP input reference, preserving locations and input hash."""
         return read_sop(path(relative_path, {".pdf", ".docx"}))
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def ingest_n8n_workflow(relative_path: str) -> dict[str, Any]:
         """Inspect normalized workflow identities and edges without disclosing parameters/credentials."""
         from .semantics import node_problem
@@ -86,18 +99,21 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
                 "edges": [e.record() for e in workflow.edges]}
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def verify_workflow_rules(workflow: str, rules: str, sop: str | None = None,
                               strict_unknown: bool = False, fail_on_all: bool = False) -> dict[str, Any]:
         """Run the canonical verifier against a supplied reviewed policy. Never approve or edit rules."""
         return audit(workflow, rules, sop=sop, strict_unknown=strict_unknown, fail_on_all=fail_on_all)
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def compare_workflow_versions(workflow: str, baseline: str, rules: str, sop: str | None = None,
                                   strict_unknown: bool = False, fail_on_all: bool = False) -> dict[str, Any]:
         """Compare revisions with the same policy and engine used by the CLI."""
         return audit(workflow, rules, baseline, sop, strict_unknown, fail_on_all)
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def get_audit_finding(audit_id: str, finding_id: str) -> dict[str, Any]:
         """Return exact canonical evidence for a finding from this session."""
         result = next((f for f in stored(audit_id)["findings"] if f["rule_id"] == finding_id), None)
@@ -106,6 +122,7 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
         return result
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def export_audit_report(audit_id: str, format: str = "json") -> str:
         """Return a stored audit as JSON or escaped Markdown without writing files."""
         result = stored(audit_id)
@@ -114,8 +131,12 @@ def register_tools(server, path, principal=lambda: "local", *, cache_seconds=Non
         return markdown(result) if format == "markdown" else json_report(result)
 
     @server.tool(annotations=annotations, meta=metadata)
+    @in_worker
     def draft_sop_requirements(relative_path: str) -> dict[str, Any]:
-        """Draft source-validated heuristic candidates; this tool cannot approve policy or call a model."""
+        """Draft source-validated candidates with source requirement IDs; verification_instructions are separate.
+
+        Interpretations need human review. This tool cannot approve policy or call a model.
+        """
         return draft_requirements(read_sop(path(relative_path, {".pdf", ".docx"}))).model_dump()
 
     return server

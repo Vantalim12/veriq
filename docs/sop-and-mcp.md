@@ -24,6 +24,12 @@ The final command returns exit 1 with `REQ-004 / FAIL / INTRODUCED`, validated s
 
 A draft records source hashes, extraction/parser versions, exact quotes/offsets, and candidate IDs. Actor/action/trigger/condition/ordering/exception fields start unresolved; the interpretation and review questions guide human review. Heuristics identify normative language, not complete business meaning. Review the surrounding source and exceptions. Drafts are rejected as verification policies.
 
+The deterministic `heuristic-2` drafter preserves complete labeled paragraphs such as `REQ-004 | ...`, including subsequent sentences, permissions and exceptions. It records the original label in `requirement_id`, while `id` remains the unique `CAND-*` key used in review decisions. Labels must use `REQ-` followed by digits at the start of a line. Multiple labeled requirements in one paragraph are separated at their labels. Unlabeled text uses sentence matching, including permission and exception wording such as `MAY`, `can` and `unless`.
+
+Explicit directives addressed to Veriq or the verification engine appear as validated source spans in `verification_instructions`, separate from business `candidates`. They are included in draft identity but are not offered as candidates for rule approval. This classification remains heuristic: business audit requirements are not excluded merely for mentioning an auditor or audit fields. Interpretation fields still require human review; no conditions, actor identities, workflow mappings or approvals are inferred.
+
+Grouping is bounded by extracted paragraph/page boundaries. A requirement continued across PDF pages or DOCX paragraphs may still need manual consolidation; it is not represented as one complete multi-block citation. Check the full source before approval. The synthetic [purchasing SOP regression fixture](../tests/fixtures/purchasing-approval-sop.pdf) exercises all eight labeled requirements, their conditions and scope limitations, and three separately classified verifier instructions.
+
 The review JSON has a required `draft_hash`, policy identity/version, declared field types, reviewer/date metadata and exactly one decision per candidate. Copy the hash printed by `rules draft` into the review after inspecting that draft. See [the example review](../examples/procurement-review.json). Each decision has `candidate_id`, `decision` (`approve`, `reject`, `review_only`), and a nonblank `reason`. Only `approve` accepts a `rule` mapping using the [existing rule grammar](rule-format.md), with `source` and `approved` omitted: Veriq attaches the validated original citation and review metadata. Edit the rule title, scope, condition, and mapping to record the approved interpretation. Rejected and external/manual requirements remain in the version-controlled review file, outside enforcement. If every candidate is rejected or review-only, no policy is created and approval returns exit 2.
 
 The draft hash covers the parsed draft, including source identity, candidates and interpretations; JSON formatting and key order do not affect it. A changed draft requires fresh review before recording its current hash. Old review files without `draft_hash` are rejected. If you edit the draft itself, inspect the edits and obtain its current hash with:
@@ -31,6 +37,8 @@ The draft hash covers the parsed draft, including source identity, candidates an
 ```bash
 python -c 'from pathlib import Path; from veriq.sop import read_draft; print(read_draft(Path("reports/sop-draft.json")).content_hash)'
 ```
+
+Stored `heuristic-1` drafts remain readable with their original hashes: absent/empty instruction metadata and null requirement IDs do not alter legacy identity. Regenerating a draft with `heuristic-2` changes its identity and can change candidate numbering; review it again instead of reusing the old review hash or decisions blindly. The committed procurement review is a synthetic example whose hash matches the current generator.
 
 Keep the SOP, draft, review, and approved policy together in version control under your team's review process. Metadata is a reviewer claim, not authenticated approval. MCP cannot perform approval.
 

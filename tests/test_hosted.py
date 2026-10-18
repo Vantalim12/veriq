@@ -1,7 +1,9 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import time
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -122,6 +124,57 @@ def test_upload_invalid_size_format_and_cleanup(settings, signing_key, monkeypat
         assert client.post("/artifacts/workflow", content=b"1234", headers=headers).status_code == 413
         assert client.post("/artifacts/workflow", content=iter([b"12", b"34"]), headers=headers).status_code == 413
         assert list(settings.data_dir.glob("*/*")) == []
+
+
+def test_health_and_upload_remain_responsive_during_verification(settings, signing_key, monkeypatch):
+    started, release, finished = (threading.Event() for _ in range(3))
+
+    def blocked_verify(*args, **kwargs):
+        started.set()
+        try:
+            if not release.wait(10):
+                raise TimeoutError("test did not release verification")
+            return verify(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr("veriq.mcp_server.verify", blocked_verify)
+    alice, bob = [bearer(signing_key, settings, user) for user in ("alice", "bob")]
+    with TestClient(create_app(settings), base_url=settings.origin) as client:
+        workflow = upload(client, alice, "workflow", "purchase-v2.json")
+        policy = upload(client, alice, "policy", "veriq.rules.yaml")
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            pending = workers.submit(rpc, client, alice, "tools/call", {
+                "name": "verify_workflow_rules", "arguments": {"workflow": workflow, "rules": policy}})
+            try:
+                assert started.wait(5), "verification did not start"
+                assert client.get("/healthz").status_code == 200
+                upload(client, bob, "workflow", "purchase-v1.json")
+                assert not finished.is_set(), "other HTTP requests waited for verification"
+            finally:
+                release.set()
+            audit = pending.result(timeout=5)["structuredContent"]
+        assert audit["summary"]["exit_code"] == 1
+        arguments = {"audit_id": audit["audit_id"], "finding_id": "REQ-004"}
+        assert rpc(client, alice, "tools/call", {"name": "get_audit_finding", "arguments": arguments})[
+            "structuredContent"] == audit["findings"][0]
+        assert rpc(client, bob, "tools/call", {"name": "get_audit_finding", "arguments": arguments})["isError"]
+
+
+def test_hosted_sop_draft_returns_complete_requirements_and_separate_instructions(settings, signing_key):
+    auth = bearer(signing_key, settings)
+    with TestClient(create_app(settings), base_url=settings.origin) as client:
+        uploaded = client.post("/artifacts/pdf", content=(ROOT / "tests/fixtures/purchasing-approval-sop.pdf").read_bytes(),
+                               headers={"Authorization": auth, "Content-Type": "application/octet-stream"})
+        assert uploaded.status_code == 201
+        draft = rpc(client, auth, "tools/call", {"name": "draft_sop_requirements", "arguments": {
+            "relative_path": uploaded.json()["artifact_id"]}})["structuredContent"]
+        assert [candidate["requirement_id"] for candidate in draft["candidates"]] == [f"REQ-{n:03}" for n in range(1, 9)]
+        assert draft["generator"] == "heuristic-2"
+        assert "MAY be processed" in draft["candidates"][4]["source"]["quote"]
+        assert "not external persistence" in draft["candidates"][5]["source"]["quote"]
+        assert len(draft["verification_instructions"]) == 3
+        assert client.delete("/artifacts/" + uploaded.json()["artifact_id"], headers={"Authorization": auth}).status_code == 200
 
 
 def test_artifact_expiry_quotas_and_private_permissions(tmp_path, monkeypatch):
