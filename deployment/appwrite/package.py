@@ -12,7 +12,8 @@ def package(root, destination):
     members = [root / name for name in ("README.md", "pyproject.toml", "constraints.txt", "requirements.txt",
         "deployment/appwrite/main.py", "deployment/appwrite/cleanup.py")]
     members += sorted((root / "src/veriq").glob("*.py"))
-    members += [root / "src/veriq/web" / name for name in ("upload.html", "upload.css", "upload.js", "favicon.png")]
+    members += [root / "src/veriq/web" / name for name in (
+        "upload.html", "upload.css", "upload.js", "sign-in.html", "sign-in.js", "favicon.png")]
     if destination.exists() or destination.resolve() in {p.resolve() for p in members}:
         raise InputError("function archive must be a new path separate from source files")
     if any(p.is_symlink() or not p.is_file() for p in members):

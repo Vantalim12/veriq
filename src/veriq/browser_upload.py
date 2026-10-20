@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+from html import escape
 from importlib.resources import files
 import json
 import secrets
@@ -39,7 +40,8 @@ def upload_routes(settings, upload):
 
     async def asset(request):
         name = request.path_params.get("name", "upload.html")
-        types = {"upload.html": "text/html", "upload.css": "text/css", "upload.js": "text/javascript", "favicon.png": "image/png"}
+        types = {"upload.html": "text/html", "upload.css": "text/css", "upload.js": "text/javascript",
+                 "sign-in.js": "text/javascript", "favicon.png": "image/png"}
         if name not in types:
             return Response(status_code=404)
         body = files("veriq").joinpath("web", name).read_bytes()
@@ -48,6 +50,22 @@ def upload_routes(settings, upload):
             body = body.replace(b"{{COMPATIBILITY_NODES}}", nodes.encode())
         return Response(body, media_type=types[name],
                         headers={"Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
+
+    async def sign_in(request):
+        if not settings.clerk_publishable_key:
+            return RedirectResponse("/upload/login", status_code=303)
+        origin = issuer
+        body = files("veriq").joinpath("web", "sign-in.html").read_text()
+        body = body.replace("{{CLERK_ORIGIN}}", escape(origin, quote=True)).replace(
+            "{{CLERK_PUBLISHABLE_KEY}}", escape(settings.clerk_publishable_key, quote=True))
+        # Clerk's UI dependencies are allowed only on this credential-entry page.
+        policy = (f"default-src 'none'; script-src 'self' {origin} https://challenges.cloudflare.com https://*.protect.clerk.com; "
+                  f"connect-src 'self' {origin} https://*.protect.clerk.com:* https://clerk-telemetry.com https://*.clerk-telemetry.com; "
+                  "style-src 'self' 'unsafe-inline'; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; "
+                  "frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; "
+                  "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+        return Response(body, media_type="text/html",
+                        headers={"Content-Security-Policy": policy, "Referrer-Policy": "no-referrer"})
 
     async def login(request):
         if not settings.upload_client_id:
@@ -124,7 +142,7 @@ def upload_routes(settings, upload):
             return JSONResponse({"error": "origin not allowed"}, status_code=403)
         return cookie(JSONResponse({"signed_in": False}), "", 0)
 
-    return [Route("/upload", asset), Route("/upload/assets/{name}", asset),
+    return [Route("/upload", asset), Route("/upload/assets/{name}", asset), Route("/upload/sign-in", sign_in),
             Route("/upload/login", login), Route("/upload/callback", complete_login),
             Route("/upload/session", session), Route("/upload/logout", logout, methods=["POST"]),
             Route("/upload/artifacts/{kind}", browser_upload, methods=["POST"])]

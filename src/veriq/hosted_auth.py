@@ -1,5 +1,6 @@
 """OAuth resource-server validation; login and consent remain with the configured issuer."""
 
+import base64
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -35,6 +36,8 @@ class HostedSettings:
     data_dir: Path
     upload_client_id: str = ""
     environment: str = "development"
+    clerk_publishable_key: str = ""
+    openai_domain_token: str = ""
 
     def __post_init__(self):
         for value in (self.origin, self.issuer, self.jwks_url):
@@ -45,6 +48,16 @@ class HostedSettings:
             raise InputError("VERIQ_UPLOAD_CLIENT_ID must be a public OAuth client ID")
         if self.environment not in {"development", "production"}:
             raise InputError("VERIQ_ENVIRONMENT must be development or production")
+        if self.clerk_publishable_key:
+            try:
+                prefix, mode, encoded = self.clerk_publishable_key.split("_", 2)
+                domain = base64.b64decode(encoded + "=" * (-len(encoded) % 4), validate=True).decode()
+                if (prefix != "pk" or mode not in {"test", "live"} or len(encoded) > 512
+                        or domain != urlsplit(self.issuer).netloc + "$"
+                        or urlsplit(self.issuer).path not in {"", "/"}):
+                    raise ValueError("publishable key does not match issuer")
+            except ValueError as exc:
+                raise InputError("VERIQ_CLERK_PUBLISHABLE_KEY must match the configured Clerk issuer") from exc
         if self.environment == "production":
             for value in (self.issuer, self.jwks_url):
                 host = urlsplit(value).hostname
@@ -64,7 +77,9 @@ class HostedSettings:
             return cls(os.environ["VERIQ_PUBLIC_ORIGIN"], os.environ["VERIQ_OAUTH_ISSUER"],
                        os.environ["VERIQ_JWKS_URL"], Path(os.environ.get("VERIQ_DATA_DIR", "/data")),
                        os.environ.get("VERIQ_UPLOAD_CLIENT_ID", ""),
-                       os.environ.get("VERIQ_ENVIRONMENT", "development"))
+                       os.environ.get("VERIQ_ENVIRONMENT", "development"),
+                       os.environ.get("VERIQ_CLERK_PUBLISHABLE_KEY", ""),
+                       os.environ.get("VERIQ_OPENAI_DOMAIN_TOKEN", ""))
         except KeyError as exc:
             raise InputError("configure VERIQ_PUBLIC_ORIGIN, VERIQ_OAUTH_ISSUER and VERIQ_JWKS_URL before serving") from exc
 

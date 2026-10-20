@@ -28,10 +28,12 @@ def test_function_package_excludes_inputs_secrets_and_preserves_existing_archive
         assert "src/veriq/appwrite_function.py" in names
         assert "deployment/appwrite/main.py" in names
         assert "deployment/appwrite/cleanup.py" in names
-        assert {"src/veriq/web/upload.html", "src/veriq/web/upload.css", "src/veriq/web/upload.js", "src/veriq/web/favicon.png"} <= set(names)
+        assert {"src/veriq/web/upload.html", "src/veriq/web/upload.css", "src/veriq/web/upload.js",
+                "src/veriq/web/sign-in.html", "src/veriq/web/sign-in.js", "src/veriq/web/favicon.png"} <= set(names)
         assert all(name in {"README.md", "pyproject.toml", "constraints.txt", "requirements.txt",
                            "deployment/appwrite/main.py", "deployment/appwrite/cleanup.py",
-                           "src/veriq/web/upload.html", "src/veriq/web/upload.css", "src/veriq/web/upload.js", "src/veriq/web/favicon.png"}
+                           "src/veriq/web/upload.html", "src/veriq/web/upload.css", "src/veriq/web/upload.js",
+                           "src/veriq/web/sign-in.html", "src/veriq/web/sign-in.js", "src/veriq/web/favicon.png"}
                    or (name.startswith("src/veriq/") and name.endswith(".py")) for name in names)
         assert all(member.isfile() for member in archive.getmembers())
         assert not any(name.startswith(("examples/", "reports/", ".env", "tests/")) for name in names)

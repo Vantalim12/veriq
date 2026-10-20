@@ -177,6 +177,40 @@ def test_unconfigured_upload_login_fails_closed(settings):
         assert client.get("/upload/login", follow_redirects=False).status_code == 503
 
 
+def test_embedded_sign_in_uses_matching_clerk_and_preserves_upload_boundary(settings):
+    encoded = base64.b64encode(b"identity.test$").decode().rstrip("=")
+    settings = replace(settings, upload_client_id="upload-client", clerk_publishable_key="pk_test_" + encoded)
+    with TestClient(create_app(settings), base_url=settings.origin) as client:
+        page = client.get("/upload/sign-in")
+        assert page.status_code == 200
+        assert settings.clerk_publishable_key in page.text
+        assert "https://identity.test/npm/@clerk/clerk-js@6.39.0/dist/clerk.browser.js" in page.text
+        assert "{{CLERK_" not in page.text
+        assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+        assert "'unsafe-eval'" not in page.headers["content-security-policy"]
+        assert page.headers["cache-control"] == "no-store"
+        assert "identity.test" not in client.get("/upload").headers["content-security-policy"]
+        assert client.get("/upload/session").json()["signed_in"] is False
+        assert client.get("/upload/assets/sign-in.js").status_code == 200
+        assert client.post("/upload/artifacts/workflow", content=b"{}", headers={
+            "Origin": settings.origin, "Content-Type": "application/octet-stream"}).status_code == 401
+
+
+def test_embedded_sign_in_falls_back_to_existing_oauth_without_publishable_key(settings):
+    with TestClient(create_app(settings), base_url=settings.origin) as client:
+        response = client.get("/upload/sign-in", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/upload/login"
+
+
+@pytest.mark.parametrize("key", ["sk_test_private", "pk_test_invalid", "pk_wrong_aWRlbnRpdHkudGVzdCQ",
+                               "pk_test_b3RoZXIudGVzdCQ"])
+def test_embedded_sign_in_rejects_invalid_or_other_issuer_keys(settings, key):
+    from veriq.ingestion import InputError
+    with pytest.raises(InputError, match="PUBLISHABLE_KEY"):
+        replace(settings, clerk_publishable_key=key)
+
+
 def test_upload_reports_unknown_node_versions_without_claiming_verification(browser):
     import json
     client, settings, _ = browser
