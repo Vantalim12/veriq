@@ -47,6 +47,7 @@ jobs:
                   "rule": finding.get("RuleID"),
                   "file": finding.get("File"),
                   "commit": finding.get("Commit"),
+                  "fingerprint": finding.get("Fingerprint"),
                   "line": finding.get("StartLine"),
                   "description": finding.get("Description"),
               }, ensure_ascii=False))
