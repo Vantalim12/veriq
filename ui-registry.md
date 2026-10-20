@@ -40,3 +40,10 @@ File: `src/veriq/web/upload.html`, `upload.css`, `upload.js`
 Last updated: 2026-10-18
 
 Place native `details`/`summary` help immediately before the file cards. Use the existing surface, line, radius and muted text tokens; keep the summary keyboard accessible and the supported nodes generated from the adapter manifest. Upload status announces node incompatibilities through the existing live region, without treating upload success as a verification verdict.
+
+### Sign-in page
+
+File: `src/veriq/web/sign-in.html`, `sign-in.js`, `upload.css`
+Last updated: 2026-10-18
+
+Reuse the upload page's sky-to-cream background, wordmark, editorial heading, Arial body text and 8px control radius. Center the Clerk-managed form in an 820px page container, with 24px below the introduction. Scope the large heading to the introduction; Clerk form headings use 22px Arial so the page's unlayered CSS does not override Clerk's layered styles. Use the existing black primary color and muted help text. Keep a visible fallback link to Clerk-hosted sign-in and a live status for loading errors. Password fields, password-manager support and validation belong to Clerk's component. Do not create a second credential form or store passwords in Veriq.

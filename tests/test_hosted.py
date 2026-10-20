@@ -22,6 +22,23 @@ from veriq.verifier import verify
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("token", ["", "test-domain-challenge_token-123"])
+def test_domain_challenge_is_public_plain_text(tmp_path, monkeypatch, token):
+    monkeypatch.setenv("VERIQ_PUBLIC_ORIGIN", "https://veriq.test")
+    monkeypatch.setenv("VERIQ_OAUTH_ISSUER", "https://identity.test/")
+    monkeypatch.setenv("VERIQ_JWKS_URL", "https://identity.test/jwks")
+    monkeypatch.setenv("VERIQ_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("VERIQ_OPENAI_DOMAIN_TOKEN", token)
+    config = HostedSettings.from_environment()
+    with TestClient(create_app(config), base_url=config.origin) as client:
+        response = client.get("/.well-known/openai-apps-challenge")
+        assert response.status_code == (200 if token else 404)
+        if token:
+            assert response.text == token
+            assert response.headers["content-type"].startswith("text/plain")
+        assert client.post("/mcp", json={}).status_code == 401
+
+
 @pytest.fixture
 def settings(tmp_path):
     return HostedSettings("https://veriq.test", "https://identity.test/", "https://identity.test/jwks", tmp_path / "data")

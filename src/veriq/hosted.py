@@ -12,7 +12,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route, request_response
 
 from .artifacts import ArtifactStore, KINDS
@@ -102,6 +102,9 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
     async def health(request):
         return JSONResponse({"status": "ok"})
 
+    async def domain_challenge(request):
+        return PlainTextResponse(settings.openai_domain_token)
+
     async def resource_metadata(request):
         # Preserve the issuer exactly; URL normalization can change OAuth issuer identity.
         return JSONResponse({"resource": settings.resource, "authorization_servers": [settings.issuer],
@@ -116,6 +119,8 @@ def create_app(settings: HostedSettings, *, store=None, audit_store=None, cleanu
         Route("/artifacts/{artifact_id}", RequireAuthMiddleware(request_response(delete), [UPLOAD_SCOPE], metadata_url), methods=["DELETE"]),
         Route("/healthz", health),
     ])
+    if settings.openai_domain_token:
+        app.routes.append(Route("/.well-known/openai-apps-challenge", domain_challenge))
     app.routes.extend(upload_routes(settings, upload))
     original_lifespan = app.router.lifespan_context
 

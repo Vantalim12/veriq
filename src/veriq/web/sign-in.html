@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Veriq</title>
+  <link rel="icon" type="image/png" href="/upload/assets/favicon.png">
+  <link rel="stylesheet" href="/upload/assets/upload.css">
+  <script defer crossorigin="anonymous" src="{{CLERK_ORIGIN}}/npm/@clerk/ui@1.40.0/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous" data-clerk-publishable-key="{{CLERK_PUBLISHABLE_KEY}}"
+          src="{{CLERK_ORIGIN}}/npm/@clerk/clerk-js@6.39.0/dist/clerk.browser.js"></script>
+  <script defer src="/upload/assets/sign-in.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/upload">Veriq<span class="brand-section">/ sign in</span></a>
+    <nav aria-label="Page navigation"><a href="/upload">Back to uploads</a></nav>
+  </header>
+  <main class="sign-in-page">
+    <div class="intro">
+      <p class="eyebrow">YOUR FILES, YOUR ACCOUNT</p>
+      <h1>Sign in.<br><span>Keep your files private.</span></h1>
+      <p class="lede">Use the same account you connect to Veriq in ChatGPT. Reviewers can use the dedicated demo account supplied with the review instructions.</p>
+    </div>
+    <section class="sign-in-panel" aria-label="Sign in to Veriq">
+      <p id="sign-in-status" role="status">Loading secure sign-in…</p>
+      <div id="clerk-sign-in"></div>
+      <noscript><p>Enable JavaScript to use the sign-in form.</p></noscript>
+      <p class="sign-in-help">Having trouble? <a href="/upload/login">Continue on Clerk’s sign-in page</a>.</p>
+    </section>
+  </main>
+</body>
+</html>
